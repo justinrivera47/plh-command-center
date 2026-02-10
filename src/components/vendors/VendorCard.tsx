@@ -1,9 +1,9 @@
 import { Link } from 'react-router-dom';
-import type { Vendor } from '../../lib/types';
+import type { VendorWithTrades } from '../../hooks/useVendors';
 import { RATING_CONFIG } from '../../lib/constants';
 
 interface VendorCardProps {
-  vendor: Vendor;
+  vendor: VendorWithTrades;
 }
 
 export function VendorCard({ vendor }: VendorCardProps) {
@@ -19,6 +19,25 @@ export function VendorCard({ vendor }: VendorCardProps) {
           <p className="text-sm text-text-secondary truncate">{vendor.poc_name}</p>
         )}
       </div>
+
+      {/* Trades */}
+      {vendor.trades && vendor.trades.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-3">
+          {vendor.trades.slice(0, 3).map((trade) => (
+            <span
+              key={trade}
+              className="px-2 py-0.5 bg-gray-100 text-text-secondary text-xs rounded"
+            >
+              {trade}
+            </span>
+          ))}
+          {vendor.trades.length > 3 && (
+            <span className="px-2 py-0.5 text-text-secondary text-xs">
+              +{vendor.trades.length - 3} more
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Contact info */}
       <div className="space-y-1 mb-3">

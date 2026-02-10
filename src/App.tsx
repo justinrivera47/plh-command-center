@@ -21,6 +21,7 @@ import { ProjectList } from './components/projects/ProjectList';
 import { ProjectDetail } from './components/projects/ProjectDetail';
 import { QuoteTracker } from './components/quotes/QuoteTracker';
 import { VendorList } from './components/vendors/VendorList';
+import { VendorDetail } from './components/vendors/VendorDetail';
 import { BossView } from './components/boss-view/BossView';
 import { SettingsPage } from './components/settings/SettingsPage';
 
@@ -130,6 +131,7 @@ function App() {
               <Route path="projects/:projectId" element={<ProjectDetail />} />
               <Route path="quotes" element={<QuoteTracker />} />
               <Route path="vendors" element={<VendorList />} />
+              <Route path="vendors/:vendorId" element={<VendorDetail />} />
               <Route path="boss-view" element={<BossView />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>

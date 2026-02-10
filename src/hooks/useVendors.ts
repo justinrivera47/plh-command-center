@@ -18,6 +18,48 @@ export function useVendors() {
   });
 }
 
+// Fetch vendors with their trades
+export function useVendorsWithTrades() {
+  return useQuery({
+    queryKey: ['vendors', 'with-trades'],
+    queryFn: async () => {
+      // Fetch vendors
+      const { data: vendors, error: vendorsError } = await supabase
+        .from('vendors')
+        .select('*')
+        .eq('status', 'active')
+        .order('company_name', { ascending: true });
+
+      if (vendorsError) throw vendorsError;
+
+      // Fetch all vendor trades with trade names
+      const { data: vendorTrades, error: tradesError } = await supabase
+        .from('vendor_trades')
+        .select('vendor_id, trade_categories(id, name)');
+
+      if (tradesError) throw tradesError;
+
+      // Map trades to vendors
+      const tradesMap: Record<string, string[]> = {};
+      vendorTrades?.forEach((vt: any) => {
+        if (!tradesMap[vt.vendor_id]) {
+          tradesMap[vt.vendor_id] = [];
+        }
+        if (vt.trade_categories?.name) {
+          tradesMap[vt.vendor_id].push(vt.trade_categories.name);
+        }
+      });
+
+      return (vendors as Vendor[]).map((vendor) => ({
+        ...vendor,
+        trades: tradesMap[vendor.id] || [],
+      }));
+    },
+  });
+}
+
+export type VendorWithTrades = Vendor & { trades: string[] };
+
 export function useAllVendors() {
   return useQuery({
     queryKey: ['vendors', 'all'],

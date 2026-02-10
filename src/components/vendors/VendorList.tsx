@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { useVendors, useTradeCategories } from '../../hooks/useVendors';
+import { useVendorsWithTrades, useTradeCategories } from '../../hooks/useVendors';
 import { VendorCard } from './VendorCard';
 import { EmptyState } from '../shared/EmptyState';
 import { SkeletonCard } from '../shared/SkeletonCard';
 import { useUIStore } from '../../stores/uiStore';
 
 export function VendorList() {
-  const { data: vendors, isLoading, error } = useVendors();
+  const { data: vendors, isLoading, error } = useVendorsWithTrades();
   const { data: trades } = useTradeCategories();
   const [searchTerm, setSearchTerm] = useState('');
   const [tradeFilter, setTradeFilter] = useState<string | null>(null);
