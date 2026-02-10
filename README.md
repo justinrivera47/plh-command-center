@@ -176,12 +176,12 @@ plh-command-center/
 - [x] Quick Entry FAB and modal (forms in Phase 5)
 - [ ] Stall prompts (Phase 6)
 
-### Phase 4: Projects + Quotes + Vendors
-- [ ] Project list with expandable cards
-- [ ] Project detail with tabs (Tasks, Quotes, Budget, Activity)
-- [ ] Quote tracker grouped by trade
-- [ ] Vendor database with search and filters
-- [ ] Vendor profile pages
+### Phase 4: Projects + Quotes + Vendors ✅
+- [x] Project list with expandable cards
+- [x] Project detail with tabs (Tasks, Quotes, Budget, Activity)
+- [x] Quote tracker grouped by trade
+- [x] Vendor database with search and filters
+- [ ] Vendor profile pages (Phase 8)
 
 ### Phase 5: Data Entry + Audit Trail
 - [ ] Quick Entry FAB and modal
