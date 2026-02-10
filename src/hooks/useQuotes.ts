@@ -7,9 +7,13 @@ export function useQuotes(projectId?: string) {
   return useQuery({
     queryKey: projectId ? ['quotes', { projectId }] : ['quotes'],
     queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
       let query = supabase
         .from('quote_comparison')
         .select('*')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
       if (projectId) {

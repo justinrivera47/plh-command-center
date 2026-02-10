@@ -69,10 +69,25 @@ export function useBudgetTotalsByProject() {
   return useQuery({
     queryKey: ['budget-totals-by-project'],
     queryFn: async () => {
-      // Get all budget areas with their project IDs
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // First get user's projects
+      const { data: userProjects, error: projectsError } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('user_id', user.id);
+
+      if (projectsError) throw projectsError;
+      if (!userProjects || userProjects.length === 0) return {};
+
+      const userProjectIds = userProjects.map(p => p.id);
+
+      // Get budget areas only for user's projects
       const { data: areas, error: areasError } = await supabase
         .from('project_budget_areas')
-        .select('id, project_id');
+        .select('id, project_id')
+        .in('project_id', userProjectIds);
 
       if (areasError) throw areasError;
       if (!areas || areas.length === 0) return {};

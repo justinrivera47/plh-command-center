@@ -17,10 +17,14 @@ export function useDecisionsNeeded() {
   return useQuery({
     queryKey: ['decisions-needed'],
     queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
       // Get quotes awaiting approval (status = 'quoted')
       const { data: pendingQuotes, error: pendingError } = await supabase
         .from('quote_comparison')
         .select('*')
+        .eq('user_id', user.id)
         .eq('status', 'quoted')
         .order('created_at', { ascending: false });
 
@@ -30,6 +34,7 @@ export function useDecisionsNeeded() {
       const { data: overBudgetQuotes, error: overBudgetError } = await supabase
         .from('quote_comparison')
         .select('*')
+        .eq('user_id', user.id)
         .not('budget_variance', 'is', null)
         .gt('budget_variance', 0)
         .in('status', ['quoted', 'pending'])

@@ -93,7 +93,10 @@ export function useExportData() {
   return useQuery({
     queryKey: ['export-data'],
     queryFn: async (): Promise<ExportData> => {
-      // Fetch all data in parallel
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Fetch all data in parallel, filtered by user
       const [
         { data: projects },
         { data: tasks },
@@ -106,15 +109,18 @@ export function useExportData() {
         supabase
           .from('projects')
           .select('*')
+          .eq('user_id', user.id)
           .in('status', ['active', 'on_hold'])
           .order('name'),
         supabase
           .from('war_room_view')
           .select('*')
+          .eq('user_id', user.id)
           .order('priority'),
         supabase
           .from('quote_comparison')
           .select('*')
+          .eq('user_id', user.id)
           .order('project_name'),
         supabase
           .from('project_budget_areas')
@@ -127,6 +133,7 @@ export function useExportData() {
         supabase
           .from('change_log')
           .select('*')
+          .eq('changed_by', user.id)
           .gte('created_at', new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString())
           .order('created_at', { ascending: false }),
         supabase
@@ -138,8 +145,9 @@ export function useExportData() {
             new_status,
             note,
             created_at,
-            rfis(project_id, task)
+            rfis!inner(project_id, task, user_id)
           `)
+          .eq('rfis.user_id', user.id)
           .gte('created_at', new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString())
           .order('created_at', { ascending: false }),
       ]);

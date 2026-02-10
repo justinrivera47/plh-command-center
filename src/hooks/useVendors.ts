@@ -6,9 +6,13 @@ export function useVendors() {
   return useQuery({
     queryKey: ['vendors'],
     queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
       const { data, error } = await supabase
         .from('vendors')
         .select('*')
+        .eq('user_id', user.id)
         .eq('status', 'active')
         .order('company_name', { ascending: true });
 
@@ -23,10 +27,14 @@ export function useVendorsWithTrades() {
   return useQuery({
     queryKey: ['vendors', 'with-trades'],
     queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
       // Fetch vendors
       const { data: vendors, error: vendorsError } = await supabase
         .from('vendors')
         .select('*')
+        .eq('user_id', user.id)
         .eq('status', 'active')
         .order('company_name', { ascending: true });
 

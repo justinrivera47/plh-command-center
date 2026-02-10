@@ -16,10 +16,14 @@ export function useWarRoom() {
   return useQuery({
     queryKey: ['war-room', filters],
     queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
       // Fetch RFIs from the war_room view (which joins with projects)
       const { data, error } = await supabase
         .from('war_room')
-        .select('*');
+        .select('*')
+        .eq('user_id', user.id);
 
       if (error) throw error;
 
@@ -94,9 +98,13 @@ export function useWarRoomStats() {
   return useQuery({
     queryKey: ['war-room', 'stats'],
     queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
       const { data, error } = await supabase
         .from('war_room')
-        .select('*');
+        .select('*')
+        .eq('user_id', user.id);
 
       if (error) throw error;
 

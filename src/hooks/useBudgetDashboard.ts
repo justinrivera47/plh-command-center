@@ -52,7 +52,10 @@ export function useBudgetDashboard(selectedProjectId?: string | null) {
   return useQuery({
     queryKey: ['budget-dashboard', selectedProjectId],
     queryFn: async (): Promise<BudgetDashboardData> => {
-      // Fetch all data in parallel
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Fetch all data in parallel, filtered by user
       const [
         { data: projects },
         { data: budgetAreas },
@@ -62,6 +65,7 @@ export function useBudgetDashboard(selectedProjectId?: string | null) {
         supabase
           .from('projects')
           .select('*')
+          .eq('user_id', user.id)
           .in('status', ['active', 'on_hold'])
           .order('name'),
         supabase
@@ -73,7 +77,8 @@ export function useBudgetDashboard(selectedProjectId?: string | null) {
           .select('*'),
         supabase
           .from('quote_comparison')
-          .select('*'),
+          .select('*')
+          .eq('user_id', user.id),
       ]);
 
       const allProjects = (projects || []) as Project[];

@@ -13,16 +13,20 @@ export function useRecentActivityByProject(limit: number = 5) {
   return useQuery({
     queryKey: ['recent-activity-by-project', limit],
     queryFn: async () => {
-      // Get recent change_log entries
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Get recent change_log entries for this user
       const { data: changes, error: changesError } = await supabase
         .from('change_log')
         .select('*')
+        .eq('changed_by', user.id)
         .order('created_at', { ascending: false })
         .limit(200);
 
       if (changesError) throw changesError;
 
-      // Get RFI activity
+      // Get RFI activity for user's RFIs
       const { data: rfiActivity, error: rfiError } = await supabase
         .from('rfi_activity_log')
         .select(`
@@ -32,21 +36,24 @@ export function useRecentActivityByProject(limit: number = 5) {
           new_status,
           note,
           created_at,
-          rfis(project_id, task)
+          rfis!inner(project_id, task, user_id)
         `)
+        .eq('rfis.user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(100);
 
       if (rfiError) throw rfiError;
 
-      // Get project info for mapping
+      // Get project info for mapping (only user's projects)
       const { data: projects } = await supabase
         .from('projects')
-        .select('id, name');
+        .select('id, name')
+        .eq('user_id', user.id);
 
       const { data: quotes } = await supabase
         .from('quotes')
-        .select('id, project_id');
+        .select('id, project_id')
+        .eq('user_id', user.id);
 
       const { data: budgetAreas } = await supabase
         .from('project_budget_areas')
@@ -58,7 +65,8 @@ export function useRecentActivityByProject(limit: number = 5) {
 
       const { data: rfis } = await supabase
         .from('rfis')
-        .select('id, project_id');
+        .select('id, project_id')
+        .eq('user_id', user.id);
 
       // Build lookup maps
       const quoteProjectMap = new Map(quotes?.map((q) => [q.id, q.project_id]) || []);

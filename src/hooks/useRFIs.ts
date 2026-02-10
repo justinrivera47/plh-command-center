@@ -8,9 +8,13 @@ export function useRFIs(projectId?: string) {
   return useQuery({
     queryKey: projectId ? ['rfis', { projectId }] : ['rfis'],
     queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
       let query = supabase
         .from('rfis')
         .select('*')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
       if (projectId) {
@@ -28,9 +32,13 @@ export function useOpenRFIs(projectId?: string) {
   return useQuery({
     queryKey: projectId ? ['rfis', 'open', { projectId }] : ['rfis', 'open'],
     queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
       let query = supabase
         .from('rfis')
         .select('*')
+        .eq('user_id', user.id)
         .eq('is_complete', false)
         .neq('status', 'dead')
         .order('priority', { ascending: true });
@@ -231,9 +239,13 @@ export function useProjectRFICounts(projectId: string) {
   return useQuery({
     queryKey: ['rfis', 'counts', projectId],
     queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
       const { data, error } = await supabase
         .from('war_room')
         .select('*')
+        .eq('user_id', user.id)
         .eq('project_id', projectId);
 
       if (error) throw error;
