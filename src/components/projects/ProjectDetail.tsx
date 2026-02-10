@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import * as Tabs from '@radix-ui/react-tabs';
-import { useProject, useProjectBudgetAreas, useProjectActivity, useCreateBudgetArea, useUpdateBudgetArea, useDeleteBudgetArea, useReorderBudgetAreas } from '../../hooks/useProjects';
+import { useProject, useUpdateProject, useProjectBudgetAreas, useProjectActivity, useCreateBudgetArea, useUpdateBudgetArea, useDeleteBudgetArea, useReorderBudgetAreas } from '../../hooks/useProjects';
 import { useAllBudgetLineItems, useCreateBudgetLineItem, useUpdateBudgetLineItem, useDeleteBudgetLineItem, useReorderBudgetLineItems } from '../../hooks/useBudgetLineItems';
 import { useRFIs } from '../../hooks/useRFIs';
 import { useQuotesByTrade, useUpdateQuoteWithLog } from '../../hooks/useQuotes';
@@ -39,6 +39,7 @@ export function ProjectDetail() {
   const setSelectedProjectId = useUIStore((state) => state.setSelectedProjectId);
   const openQuoteDrawer = useUIStore((state) => state.openQuoteDrawer);
   const updateQuote = useUpdateQuoteWithLog();
+  const updateProject = useUpdateProject();
   const createBudgetArea = useCreateBudgetArea();
   const updateBudgetArea = useUpdateBudgetArea();
   const deleteBudgetArea = useDeleteBudgetArea();
@@ -52,6 +53,8 @@ export function ProjectDetail() {
   const reorderLineItems = useReorderBudgetLineItems();
 
   const [taskStatusFilter, setTaskStatusFilter] = useState<'all' | 'open' | 'completed' | 'dead'>('open');
+  const [editingTotalBudget, setEditingTotalBudget] = useState(false);
+  const [editingAreaBudgetId, setEditingAreaBudgetId] = useState<string | null>(null);
   const [newAreaName, setNewAreaName] = useState('');
   const [editingAreaNameId, setEditingAreaNameId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -197,6 +200,21 @@ export function ProjectDetail() {
     setEditingAreaNameId(null);
   };
 
+  const handleUpdateAreaBudget = async (area: ProjectBudgetArea, value: string) => {
+    if (!projectId || !user) return;
+
+    // Empty string = clear the budget (null), "0" = explicitly budgeted zero
+    const numValue = value === '' ? null : parseFloat(value);
+
+    await updateBudgetArea.mutateAsync({
+      id: area.id,
+      project_id: projectId,
+      budgeted_amount: numValue,
+      userId: user.id,
+    });
+    setEditingAreaBudgetId(null);
+  };
+
   const handleDeleteArea = async (areaId: string) => {
     const area = budgetAreas?.find((a) => a.id === areaId);
     if (!area || !user || !projectId) return;
@@ -233,21 +251,42 @@ export function ProjectDetail() {
   };
 
   // Helper to calculate area totals from line items
-  const getAreaTotals = (areaId: string) => {
+  const getAreaTotals = (areaId: string, area: ProjectBudgetArea) => {
     const items = getAreaLineItems(areaId);
-    const budgeted = items.reduce((sum, li) => sum + (li.budgeted_amount || 0), 0);
+    const lineItemBudgeted = items.reduce((sum, li) => sum + (li.budgeted_amount || 0), 0);
     const actual = items.reduce((sum, li) => sum + (li.actual_amount || 0), 0);
-    return { budgeted, actual, itemCount: items.length };
+
+    // Determine effective budget:
+    // 1. If area has explicit budget set, use that
+    // 2. Otherwise, if line items have budgets, sum those
+    // 3. Otherwise, no budget is set (null)
+    const hasExplicitBudget = area.budgeted_amount !== null;
+    const hasLineItemBudgets = lineItemBudgeted > 0;
+    const hasBudget = hasExplicitBudget || hasLineItemBudgets;
+    const effectiveBudget = hasExplicitBudget ? area.budgeted_amount : (hasLineItemBudgets ? lineItemBudgeted : null);
+
+    return {
+      budgeted: effectiveBudget,
+      lineItemBudgeted,
+      actual,
+      itemCount: items.length,
+      hasBudget,
+      hasExplicitBudget,
+    };
   };
 
-  // Helper to calculate overall project totals from all line items
-  const getProjectTotals = () => {
-    const items = allLineItems || [];
-    const budgeted = items.reduce((sum, li) => sum + (li.budgeted_amount || 0), 0);
-    const actual = items.reduce((sum, li) => sum + (li.actual_amount || 0), 0);
-    return { budgeted, actual };
-  };
-  const projectTotals = getProjectTotals();
+
+  // Calculate sum of all explicit area budgets for unallocated calculation
+  const totalAreaBudgets = (budgetAreas || []).reduce((sum, area) => {
+    const totals = getAreaTotals(area.id, area);
+    return sum + (totals.budgeted || 0);
+  }, 0);
+
+  // Calculate total committed (actual spending) across all areas
+  const totalCommitted = (allLineItems || []).reduce((sum, li) => sum + (li.actual_amount || 0), 0);
+
+  // Unallocated = Project Budget - Sum of Area Budgets
+  const unallocatedBudget = (project?.total_budget || 0) - totalAreaBudgets;
 
   // Line item handlers
   const handleAddLineItem = async (areaId: string) => {
@@ -331,6 +370,17 @@ export function ProjectDetail() {
 
   const hasQuotes = groupedQuotes && Object.keys(groupedQuotes).length > 0;
 
+  const handleUpdateTotalBudget = async (value: string) => {
+    if (!project || !user) return;
+    const numValue = value ? parseFloat(value) : null;
+    await updateProject.mutateAsync({
+      id: project.id,
+      userId: user.id,
+      total_budget: numValue,
+    });
+    setEditingTotalBudget(false);
+  };
+
   return (
     <div className="px-4 py-6">
       {/* Header */}
@@ -341,16 +391,80 @@ export function ProjectDetail() {
         <h1 className="text-xl font-semibold text-text-primary">{project.name}</h1>
         <div className="text-sm text-text-secondary mt-1">
           {project.client_name && <span>{project.client_name}</span>}
-          {(projectTotals.budgeted > 0 || projectTotals.actual > 0) && (
-            <span className="ml-4">
-              Budget: {formatCurrency(projectTotals.budgeted)} | Actual: {formatCurrency(projectTotals.actual)}
-              {projectTotals.budgeted > 0 && (
-                <span className={projectTotals.actual > projectTotals.budgeted ? ' text-red-600' : ' text-green-600'}>
-                  {' '}({((projectTotals.actual / projectTotals.budgeted) * 100).toFixed(0)}%)
-                </span>
+        </div>
+
+        {/* Budget Summary Card */}
+        <div className="mt-4 bg-white rounded-lg border border-border p-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {/* Project Budget (editable) */}
+            <div>
+              <div className="text-xs text-text-secondary mb-1">Project Budget</div>
+              {editingTotalBudget ? (
+                <div className="flex items-center gap-1">
+                  <span className="text-text-secondary">$</span>
+                  <input
+                    type="number"
+                    step="1"
+                    defaultValue={project.total_budget || ''}
+                    onBlur={(e) => handleUpdateTotalBudget(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleUpdateTotalBudget((e.target as HTMLInputElement).value);
+                      if (e.key === 'Escape') setEditingTotalBudget(false);
+                    }}
+                    className="w-24 px-2 py-1 border border-border rounded text-sm font-semibold"
+                    autoFocus
+                    placeholder="0"
+                  />
+                </div>
+              ) : (
+                <button
+                  onClick={() => setEditingTotalBudget(true)}
+                  className="text-lg font-semibold text-text-primary hover:text-primary-600 flex items-center gap-1"
+                  title="Click to edit"
+                >
+                  {project.total_budget ? formatCurrency(project.total_budget) : '—'}
+                  <svg className="w-3 h-3 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </button>
               )}
-            </span>
-          )}
+            </div>
+
+            {/* Allocated to Areas */}
+            <div>
+              <div className="text-xs text-text-secondary mb-1">Allocated</div>
+              <div className="text-lg font-semibold text-text-primary">
+                {formatCurrency(totalAreaBudgets || null)}
+              </div>
+            </div>
+
+            {/* Committed (Actual Spent) */}
+            <div>
+              <div className="text-xs text-text-secondary mb-1">Committed</div>
+              <div className={`text-lg font-semibold ${
+                project.total_budget && totalCommitted > project.total_budget ? 'text-red-600' : 'text-text-primary'
+              }`}>
+                {formatCurrency(totalCommitted || null)}
+              </div>
+            </div>
+
+            {/* Remaining */}
+            <div>
+              <div className="text-xs text-text-secondary mb-1">Remaining</div>
+              {project.total_budget ? (
+                <div className={`text-lg font-semibold ${
+                  project.total_budget - totalCommitted < 0 ? 'text-red-600' : 'text-green-600'
+                }`}>
+                  {formatCurrency(project.total_budget - totalCommitted)}
+                  <span className="text-sm ml-1">
+                    ({(((project.total_budget - totalCommitted) / project.total_budget) * 100).toFixed(0)}%)
+                  </span>
+                </div>
+              ) : (
+                <div className="text-lg font-semibold text-text-secondary">—</div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -505,13 +619,17 @@ export function ProjectDetail() {
               {budgetAreas && budgetAreas.length > 0 ? (
                 <>
                   {budgetAreas.map((area, areaIndex) => {
-                    const areaTotals = getAreaTotals(area.id);
-                    const areaVariance = areaTotals.actual - areaTotals.budgeted;
+                    const areaTotals = getAreaTotals(area.id, area);
+                    const areaVariance = areaTotals.budgeted !== null ? areaTotals.actual - areaTotals.budgeted : 0;
                     const areaVariancePercent = areaTotals.budgeted
                       ? ((areaVariance / areaTotals.budgeted) * 100)
                       : 0;
                     const areaLineItems = getAreaLineItems(area.id);
                     const isExpanded = expandedAreaId === area.id;
+
+                    // Determine budget status
+                    const isOverBudget = areaTotals.hasBudget && areaTotals.actual > (areaTotals.budgeted || 0);
+                    const budgetStatus = isOverBudget ? 'over' : areaTotals.hasBudget ? 'set' : 'none';
 
                     return (
                       <div key={area.id} className="bg-white rounded-lg border border-border overflow-hidden">
@@ -531,6 +649,20 @@ export function ProjectDetail() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                             </svg>
                           </button>
+
+                          {/* Budget status indicator */}
+                          <span
+                            className="text-sm"
+                            title={
+                              budgetStatus === 'over' ? 'Over budget' :
+                              budgetStatus === 'set' ? 'Budget set' :
+                              'No budget set'
+                            }
+                          >
+                            {budgetStatus === 'over' && '🔴'}
+                            {budgetStatus === 'set' && '✅'}
+                            {budgetStatus === 'none' && '⚠️'}
+                          </span>
 
                           {/* Area name - editable */}
                           <div className="flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
@@ -555,23 +687,59 @@ export function ProjectDetail() {
 
                           {/* Area totals */}
                           <div className="flex items-center gap-4 text-sm" onClick={(e) => e.stopPropagation()}>
+                            {/* Budget - editable */}
                             <div className="text-right">
-                              <div className="text-text-secondary text-xs">Budgeted</div>
-                              <div className="font-medium">{formatCurrency(areaTotals.budgeted || null)}</div>
+                              <div className="text-text-secondary text-xs">Budget</div>
+                              {editingAreaBudgetId === area.id ? (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-text-secondary text-xs">$</span>
+                                  <input
+                                    type="number"
+                                    step="1"
+                                    defaultValue={area.budgeted_amount ?? ''}
+                                    onBlur={(e) => handleUpdateAreaBudget(area, e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') handleUpdateAreaBudget(area, (e.target as HTMLInputElement).value);
+                                      if (e.key === 'Escape') setEditingAreaBudgetId(null);
+                                    }}
+                                    className="w-20 px-1 py-0.5 border border-border rounded text-sm text-right"
+                                    autoFocus
+                                    placeholder="None"
+                                  />
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setEditingAreaBudgetId(area.id)}
+                                  className={`font-medium hover:text-primary-600 ${
+                                    areaTotals.hasBudget ? 'text-text-primary' : 'text-amber-600 text-xs'
+                                  }`}
+                                  title={areaTotals.hasExplicitBudget ? 'Explicit budget set' : areaTotals.hasBudget ? 'Derived from line items' : 'Click to set budget'}
+                                >
+                                  {areaTotals.hasBudget ? formatCurrency(areaTotals.budgeted) : 'No budget set'}
+                                </button>
+                              )}
                             </div>
+
+                            {/* Actual/Committed */}
                             <div className="text-right">
-                              <div className="text-text-secondary text-xs">Actual</div>
+                              <div className="text-text-secondary text-xs">
+                                {areaTotals.hasBudget ? 'Actual' : 'Committed'}
+                              </div>
                               <div className="font-medium">{formatCurrency(areaTotals.actual || null)}</div>
                             </div>
+
+                            {/* Variance - only show when budget exists */}
                             <div className="text-right w-20">
                               <div className="text-text-secondary text-xs">Variance</div>
-                              <div className={`font-medium ${
-                                areaVariance > 0 ? 'text-red-600' : areaVariance < 0 ? 'text-green-600' : 'text-text-secondary'
-                              }`}>
-                                {areaTotals.budgeted ? (
-                                  <>{areaVariance > 0 ? '+' : ''}{areaVariancePercent.toFixed(1)}%</>
-                                ) : '—'}
-                              </div>
+                              {areaTotals.hasBudget ? (
+                                <div className={`font-medium ${
+                                  areaVariance > 0 ? 'text-red-600' : areaVariance < 0 ? 'text-green-600' : 'text-text-secondary'
+                                }`}>
+                                  {areaVariance > 0 ? '+' : ''}{areaVariancePercent.toFixed(1)}%
+                                </div>
+                              ) : (
+                                <div className="text-text-secondary text-xs">—</div>
+                              )}
                             </div>
 
                             {/* Area actions */}
@@ -770,10 +938,69 @@ export function ProjectDetail() {
                     );
                   })}
 
-                  {/* Grand Totals */}
+                  {/* Unallocated Budget Summary */}
+                  {project.total_budget && project.total_budget > 0 && (
+                    <div className="bg-blue-50 rounded-lg border border-blue-200 px-4 py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-4">
+                        <div className="flex items-center gap-6 text-sm">
+                          <div>
+                            <div className="text-blue-700 text-xs font-medium">Total Budget</div>
+                            <div className="font-semibold text-blue-900">{formatCurrency(project.total_budget)}</div>
+                          </div>
+                          <div>
+                            <div className="text-blue-700 text-xs font-medium">Allocated to Areas</div>
+                            <div className="font-semibold text-blue-900">{formatCurrency(totalAreaBudgets)}</div>
+                          </div>
+                          <div>
+                            <div className="text-blue-700 text-xs font-medium">Unallocated</div>
+                            <div className={`font-semibold ${unallocatedBudget >= 0 ? 'text-blue-900' : 'text-red-600'}`}>
+                              {formatCurrency(unallocatedBudget)}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-6 text-sm">
+                          <div>
+                            <div className="text-blue-700 text-xs font-medium">Total Committed</div>
+                            <div className={`font-semibold ${
+                              totalCommitted > project.total_budget ? 'text-red-600' : 'text-blue-900'
+                            }`}>
+                              {formatCurrency(totalCommitted)}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-blue-700 text-xs font-medium">Remaining</div>
+                            <div className={`font-semibold ${
+                              project.total_budget - totalCommitted < 0 ? 'text-red-600' : 'text-green-600'
+                            }`}>
+                              {formatCurrency(project.total_budget - totalCommitted)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      {/* Progress bar */}
+                      <div className="mt-3">
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-blue-700">Budget Usage</span>
+                          <span className={totalCommitted > project.total_budget ? 'text-red-600' : 'text-blue-700'}>
+                            {((totalCommitted / project.total_budget) * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                        <div className="h-2 bg-blue-200 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              totalCommitted > project.total_budget ? 'bg-red-500' : 'bg-blue-600'
+                            }`}
+                            style={{ width: `${Math.min((totalCommitted / project.total_budget) * 100, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Grand Totals - Line Item Summary */}
                   <div className="bg-gray-50 rounded-lg border border-border px-4 py-3">
                     <div className="flex items-center justify-between">
-                      <span className="font-semibold text-text-primary">Grand Total</span>
+                      <span className="font-semibold text-text-primary">Line Item Totals</span>
                       <div className="flex items-center gap-6 text-sm">
                         <div className="text-right">
                           <div className="text-text-secondary text-xs">Budgeted</div>
