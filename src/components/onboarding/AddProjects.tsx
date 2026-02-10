@@ -17,7 +17,7 @@ export function AddProjects({ onNext, onBack }: AddProjectsProps) {
     resolver: zodResolver(addProjectsSchema),
     defaultValues: {
       projects: [
-        { name: '', client_name: '', address: '', client_email: '', client_phone: '' },
+        { name: '', client_name: '', address: '', client_email: '', client_phone: '', total_budget: undefined },
       ],
     },
   });
@@ -153,7 +153,7 @@ export function AddProjects({ onNext, onBack }: AddProjectsProps) {
       <button
         type="button"
         onClick={() =>
-          append({ name: '', client_name: '', address: '', client_email: '', client_phone: '' })
+          append({ name: '', client_name: '', address: '', client_email: '', client_phone: '', total_budget: undefined })
         }
         className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-text-secondary hover:border-primary-500 hover:text-primary-600 transition-colors"
       >
