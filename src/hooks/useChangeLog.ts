@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 
-export type RecordType = 'project' | 'rfi' | 'quote' | 'budget_area' | 'vendor';
+export type RecordType = 'project' | 'rfi' | 'quote' | 'budget_area' | 'budget_line_item' | 'vendor';
 
 interface ChangeEntry {
   field: string;

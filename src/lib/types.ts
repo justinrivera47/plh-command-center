@@ -174,6 +174,18 @@ export interface ProjectBudgetArea {
   sort_order: number;
 }
 
+export interface BudgetLineItem {
+  id: string;
+  budget_area_id: string;
+  item_name: string;
+  budgeted_amount: number | null;
+  actual_amount: number | null;
+  sort_order: number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // ============================================
 // Communication
 // ============================================

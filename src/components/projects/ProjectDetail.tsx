@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import * as Tabs from '@radix-ui/react-tabs';
 import { useProject, useProjectBudgetAreas, useProjectActivity, useCreateBudgetArea, useUpdateBudgetArea, useDeleteBudgetArea, useReorderBudgetAreas } from '../../hooks/useProjects';
+import { useAllBudgetLineItems, useCreateBudgetLineItem, useUpdateBudgetLineItem, useDeleteBudgetLineItem, useReorderBudgetLineItems } from '../../hooks/useBudgetLineItems';
 import { useRFIs } from '../../hooks/useRFIs';
 import { useQuotesByTrade, useUpdateQuoteWithLog } from '../../hooks/useQuotes';
 import { useAuth } from '../../hooks/useAuth';
@@ -12,7 +13,7 @@ import { DeleteConfirmDialog } from '../shared/DeleteConfirmDialog';
 import { useUIStore } from '../../stores/uiStore';
 import { QUOTE_STATUS_CONFIG } from '../../lib/constants';
 import { QuoteDetailDrawer } from '../quotes/QuoteDetailDrawer';
-import type { WarRoomItem, QuoteStatus, ProjectBudgetArea } from '../../lib/types';
+import type { WarRoomItem, QuoteStatus, ProjectBudgetArea, BudgetLineItem } from '../../lib/types';
 
 const QUOTE_STATUS_ORDER: QuoteStatus[] = [
   'pending', 'quoted', 'approved', 'declined',
@@ -43,11 +44,23 @@ export function ProjectDetail() {
   const deleteBudgetArea = useDeleteBudgetArea();
   const reorderBudgetAreas = useReorderBudgetAreas();
 
+  // Line item hooks
+  const { data: allLineItems, isLoading: lineItemsLoading } = useAllBudgetLineItems(projectId);
+  const createLineItem = useCreateBudgetLineItem();
+  const updateLineItem = useUpdateBudgetLineItem();
+  const deleteLineItem = useDeleteBudgetLineItem();
+  const reorderLineItems = useReorderBudgetLineItems();
+
   const [taskStatusFilter, setTaskStatusFilter] = useState<'all' | 'open' | 'completed' | 'dead'>('open');
   const [newAreaName, setNewAreaName] = useState('');
-  const [editingAreaId, setEditingAreaId] = useState<string | null>(null);
   const [editingAreaNameId, setEditingAreaNameId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  // Line item state
+  const [expandedAreaId, setExpandedAreaId] = useState<string | null>(null);
+  const [newLineItemName, setNewLineItemName] = useState<Record<string, string>>({});
+  const [editingLineItemId, setEditingLineItemId] = useState<string | null>(null);
+  const [deleteLineItemConfirmId, setDeleteLineItemConfirmId] = useState<string | null>(null);
 
   // Helper to open quick entry with project context
   const openQuickEntryWithProject = (type: 'quote' | 'rfi' | 'status' | 'call' | 'vendor') => {
@@ -135,14 +148,14 @@ export function ProjectDetail() {
     return priorityOrder[a.priority] - priorityOrder[b.priority];
   });
 
-  // Calculate budget totals
-  const budgetTotals = budgetAreas?.reduce(
-    (acc, area) => ({
-      budgeted: acc.budgeted + (area.budgeted_amount || 0),
-      actual: acc.actual + (area.actual_amount || 0),
+  // Calculate budget totals from line items
+  const budgetTotals = (allLineItems || []).reduce(
+    (acc, item) => ({
+      budgeted: acc.budgeted + (item.budgeted_amount || 0),
+      actual: acc.actual + (item.actual_amount || 0),
     }),
     { budgeted: 0, actual: 0 }
-  ) || { budgeted: 0, actual: 0 };
+  );
 
   const totalVariance = budgetTotals.actual - budgetTotals.budgeted;
 
@@ -171,28 +184,17 @@ export function ProjectDetail() {
     setNewAreaName('');
   };
 
-  const handleUpdateBudgetArea = async (area: ProjectBudgetArea, field: 'budgeted_amount' | 'actual_amount' | 'area_name', value: string) => {
+  const handleUpdateAreaName = async (area: ProjectBudgetArea, value: string) => {
     if (!projectId || !user) return;
+    if (!value.trim()) return;
 
-    if (field === 'area_name') {
-      if (!value.trim()) return;
-      await updateBudgetArea.mutateAsync({
-        id: area.id,
-        project_id: projectId,
-        area_name: value.trim(),
-        userId: user.id,
-      });
-      setEditingAreaNameId(null);
-    } else {
-      const numValue = value ? parseFloat(value) : null;
-      await updateBudgetArea.mutateAsync({
-        id: area.id,
-        project_id: projectId,
-        [field]: numValue,
-        userId: user.id,
-      });
-      setEditingAreaId(null);
-    }
+    await updateBudgetArea.mutateAsync({
+      id: area.id,
+      project_id: projectId,
+      area_name: value.trim(),
+      userId: user.id,
+    });
+    setEditingAreaNameId(null);
   };
 
   const handleDeleteArea = async (areaId: string) => {
@@ -222,6 +224,99 @@ export function ProjectDetail() {
     await reorderBudgetAreas.mutateAsync({
       project_id: projectId,
       orderedIds: newOrder.map((a) => a.id),
+    });
+  };
+
+  // Helper to get line items for an area
+  const getAreaLineItems = (areaId: string) => {
+    return (allLineItems || []).filter((li) => li.budget_area_id === areaId);
+  };
+
+  // Helper to calculate area totals from line items
+  const getAreaTotals = (areaId: string) => {
+    const items = getAreaLineItems(areaId);
+    const budgeted = items.reduce((sum, li) => sum + (li.budgeted_amount || 0), 0);
+    const actual = items.reduce((sum, li) => sum + (li.actual_amount || 0), 0);
+    return { budgeted, actual, itemCount: items.length };
+  };
+
+  // Line item handlers
+  const handleAddLineItem = async (areaId: string) => {
+    const name = newLineItemName[areaId]?.trim();
+    if (!name || !projectId || !user) return;
+
+    const areaItems = getAreaLineItems(areaId);
+    await createLineItem.mutateAsync({
+      budget_area_id: areaId,
+      item_name: name,
+      budgeted_amount: null,
+      actual_amount: null,
+      sort_order: areaItems.length + 1,
+      notes: null,
+      userId: user.id,
+      projectId,
+    });
+    setNewLineItemName((prev) => ({ ...prev, [areaId]: '' }));
+  };
+
+  const handleUpdateLineItem = async (
+    lineItem: BudgetLineItem,
+    field: 'item_name' | 'budgeted_amount' | 'actual_amount',
+    value: string
+  ) => {
+    if (!projectId || !user) return;
+
+    if (field === 'item_name') {
+      if (!value.trim()) return;
+      await updateLineItem.mutateAsync({
+        id: lineItem.id,
+        budget_area_id: lineItem.budget_area_id,
+        projectId,
+        item_name: value.trim(),
+        userId: user.id,
+      });
+    } else {
+      const numValue = value ? parseFloat(value) : null;
+      await updateLineItem.mutateAsync({
+        id: lineItem.id,
+        budget_area_id: lineItem.budget_area_id,
+        projectId,
+        [field]: numValue,
+        userId: user.id,
+      });
+    }
+    setEditingLineItemId(null);
+  };
+
+  const handleDeleteLineItem = async (lineItem: BudgetLineItem) => {
+    if (!user || !projectId) return;
+
+    await deleteLineItem.mutateAsync({
+      id: lineItem.id,
+      budget_area_id: lineItem.budget_area_id,
+      projectId,
+      userId: user.id,
+      lineItemData: lineItem,
+    });
+    setDeleteLineItemConfirmId(null);
+  };
+
+  const handleMoveLineItem = async (lineItem: BudgetLineItem, direction: 'up' | 'down') => {
+    if (!projectId) return;
+
+    const areaItems = getAreaLineItems(lineItem.budget_area_id);
+    const currentIndex = areaItems.findIndex((li) => li.id === lineItem.id);
+    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+
+    if (newIndex < 0 || newIndex >= areaItems.length) return;
+
+    const newOrder = [...areaItems];
+    [newOrder[currentIndex], newOrder[newIndex]] = [newOrder[newIndex], newOrder[currentIndex]];
+
+    await reorderLineItems.mutateAsync({
+      budget_area_id: lineItem.budget_area_id,
+      projectId,
+      orderedIds: newOrder.map((li) => li.id),
     });
   };
 
@@ -387,191 +482,313 @@ export function ProjectDetail() {
 
         {/* Budget Tab */}
         <Tabs.Content value="budget">
-          {budgetLoading && <SkeletonList count={3} />}
-          {!budgetLoading && (
-            <div className="bg-white rounded-lg border border-border overflow-hidden">
-              {/* Budget table */}
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50 border-b border-border">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary uppercase">Area</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-text-secondary uppercase">Budgeted</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-text-secondary uppercase">Actual</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-text-secondary uppercase">Variance</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-text-secondary uppercase">%</th>
-                      <th className="px-2 py-3 text-center text-xs font-medium text-text-secondary uppercase w-24">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {budgetAreas && budgetAreas.length > 0 ? (
-                      budgetAreas.map((area, index) => {
-                        const variance = (area.actual_amount || 0) - (area.budgeted_amount || 0);
-                        const variancePercent = area.budgeted_amount
-                          ? ((variance / area.budgeted_amount) * 100)
-                          : 0;
-                        return (
-                          <tr key={area.id} className="hover:bg-gray-50">
-                            {/* Area name - editable */}
-                            <td className="px-4 py-3 text-sm">
-                              {editingAreaNameId === area.id ? (
-                                <input
-                                  type="text"
-                                  defaultValue={area.area_name}
-                                  onBlur={(e) => handleUpdateBudgetArea(area, 'area_name', e.target.value)}
-                                  onKeyDown={(e) => e.key === 'Enter' && handleUpdateBudgetArea(area, 'area_name', (e.target as HTMLInputElement).value)}
-                                  className="w-full px-2 py-1 border border-border rounded text-sm"
-                                  autoFocus
-                                />
-                              ) : (
-                                <button
-                                  onClick={() => setEditingAreaNameId(area.id)}
-                                  className="text-text-primary hover:text-primary-600 text-left"
-                                >
-                                  {area.area_name}
-                                </button>
-                              )}
-                            </td>
-                            {/* Budgeted amount */}
-                            <td className="px-4 py-3 text-sm text-right">
-                              {editingAreaId === `${area.id}-budget` ? (
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  defaultValue={area.budgeted_amount || ''}
-                                  onBlur={(e) => handleUpdateBudgetArea(area, 'budgeted_amount', e.target.value)}
-                                  onKeyDown={(e) => e.key === 'Enter' && handleUpdateBudgetArea(area, 'budgeted_amount', (e.target as HTMLInputElement).value)}
-                                  className="w-24 px-2 py-1 text-right border border-border rounded text-sm"
-                                  autoFocus
-                                />
-                              ) : (
-                                <button
-                                  onClick={() => setEditingAreaId(`${area.id}-budget`)}
-                                  className="text-text-primary hover:text-primary-600"
-                                >
-                                  {formatCurrency(area.budgeted_amount)}
-                                </button>
-                              )}
-                            </td>
-                            {/* Actual amount */}
-                            <td className="px-4 py-3 text-sm text-right">
-                              {editingAreaId === `${area.id}-actual` ? (
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  defaultValue={area.actual_amount || ''}
-                                  onBlur={(e) => handleUpdateBudgetArea(area, 'actual_amount', e.target.value)}
-                                  onKeyDown={(e) => e.key === 'Enter' && handleUpdateBudgetArea(area, 'actual_amount', (e.target as HTMLInputElement).value)}
-                                  className="w-24 px-2 py-1 text-right border border-border rounded text-sm"
-                                  autoFocus
-                                />
-                              ) : (
-                                <button
-                                  onClick={() => setEditingAreaId(`${area.id}-actual`)}
-                                  className="text-text-primary hover:text-primary-600"
-                                >
-                                  {formatCurrency(area.actual_amount)}
-                                </button>
-                              )}
-                            </td>
-                            {/* Variance $ */}
-                            <td className={`px-4 py-3 text-sm text-right font-medium ${
-                              variance > 0 ? 'text-red-600' : variance < 0 ? 'text-green-600' : 'text-text-secondary'
-                            }`}>
-                              {area.budgeted_amount ? (
-                                <>
-                                  {variance > 0 ? '+' : ''}{formatCurrency(variance)}
-                                </>
-                              ) : '—'}
-                            </td>
-                            {/* Variance % */}
-                            <td className={`px-4 py-3 text-sm text-right ${
-                              variancePercent > 0 ? 'text-red-600' : variancePercent < 0 ? 'text-green-600' : 'text-text-secondary'
-                            }`}>
-                              {area.budgeted_amount ? (
-                                <>
-                                  {variancePercent > 0 ? '+' : ''}{variancePercent.toFixed(1)}%
-                                </>
-                              ) : '—'}
-                            </td>
-                            {/* Actions */}
-                            <td className="px-2 py-3 text-sm">
-                              <div className="flex items-center justify-center gap-1">
-                                {/* Move up */}
-                                <button
-                                  onClick={() => handleMoveArea(area.id, 'up')}
-                                  disabled={index === 0}
-                                  className="p-1 text-text-secondary hover:text-primary-600 disabled:opacity-30 disabled:cursor-not-allowed"
-                                  title="Move up"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                                  </svg>
-                                </button>
-                                {/* Move down */}
-                                <button
-                                  onClick={() => handleMoveArea(area.id, 'down')}
-                                  disabled={index === budgetAreas.length - 1}
-                                  className="p-1 text-text-secondary hover:text-primary-600 disabled:opacity-30 disabled:cursor-not-allowed"
-                                  title="Move down"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                  </svg>
-                                </button>
-                                {/* Delete */}
-                                <button
-                                  onClick={() => setDeleteConfirmId(area.id)}
-                                  className="p-1 text-text-secondary hover:text-red-600"
-                                  title="Delete area"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </button>
+          {(budgetLoading || lineItemsLoading) && <SkeletonList count={3} />}
+          {!budgetLoading && !lineItemsLoading && (
+            <div className="space-y-4">
+              {/* Budget Areas */}
+              {budgetAreas && budgetAreas.length > 0 ? (
+                <>
+                  {budgetAreas.map((area, areaIndex) => {
+                    const areaTotals = getAreaTotals(area.id);
+                    const areaVariance = areaTotals.actual - areaTotals.budgeted;
+                    const areaVariancePercent = areaTotals.budgeted
+                      ? ((areaVariance / areaTotals.budgeted) * 100)
+                      : 0;
+                    const areaLineItems = getAreaLineItems(area.id);
+                    const isExpanded = expandedAreaId === area.id;
+
+                    return (
+                      <div key={area.id} className="bg-white rounded-lg border border-border overflow-hidden">
+                        {/* Area Header Row */}
+                        <div
+                          className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-border cursor-pointer hover:bg-gray-100"
+                          onClick={() => setExpandedAreaId(isExpanded ? null : area.id)}
+                        >
+                          {/* Expand/Collapse chevron */}
+                          <button className="text-text-secondary">
+                            <svg
+                              className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+
+                          {/* Area name - editable */}
+                          <div className="flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+                            {editingAreaNameId === area.id ? (
+                              <input
+                                type="text"
+                                defaultValue={area.area_name}
+                                onBlur={(e) => handleUpdateAreaName(area, e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleUpdateAreaName(area, (e.target as HTMLInputElement).value)}
+                                className="w-full px-2 py-1 border border-border rounded text-sm font-medium"
+                                autoFocus
+                              />
+                            ) : (
+                              <button
+                                onClick={() => setEditingAreaNameId(area.id)}
+                                className="text-text-primary font-medium hover:text-primary-600 text-left truncate"
+                              >
+                                {area.area_name}
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Area totals */}
+                          <div className="flex items-center gap-4 text-sm" onClick={(e) => e.stopPropagation()}>
+                            <div className="text-right">
+                              <div className="text-text-secondary text-xs">Budgeted</div>
+                              <div className="font-medium">{formatCurrency(areaTotals.budgeted || null)}</div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-text-secondary text-xs">Actual</div>
+                              <div className="font-medium">{formatCurrency(areaTotals.actual || null)}</div>
+                            </div>
+                            <div className="text-right w-20">
+                              <div className="text-text-secondary text-xs">Variance</div>
+                              <div className={`font-medium ${
+                                areaVariance > 0 ? 'text-red-600' : areaVariance < 0 ? 'text-green-600' : 'text-text-secondary'
+                              }`}>
+                                {areaTotals.budgeted ? (
+                                  <>{areaVariance > 0 ? '+' : ''}{areaVariancePercent.toFixed(1)}%</>
+                                ) : '—'}
                               </div>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    ) : (
-                      <tr>
-                        <td colSpan={6} className="px-4 py-8 text-center text-text-secondary text-sm">
-                          No budget areas yet. Add one below.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                  {/* Totals row */}
-                  {budgetAreas && budgetAreas.length > 0 && (
-                    <tfoot className="bg-gray-50 border-t border-border">
-                      <tr>
-                        <td className="px-4 py-3 text-sm font-semibold text-text-primary">Total</td>
-                        <td className="px-4 py-3 text-sm text-right font-semibold">{formatCurrency(budgetTotals.budgeted)}</td>
-                        <td className="px-4 py-3 text-sm text-right font-semibold">{formatCurrency(budgetTotals.actual)}</td>
-                        <td className={`px-4 py-3 text-sm text-right font-semibold ${
-                          totalVariance > 0 ? 'text-red-600' : totalVariance < 0 ? 'text-green-600' : 'text-text-secondary'
-                        }`}>
-                          {totalVariance > 0 ? '+' : ''}{formatCurrency(totalVariance)}
-                        </td>
-                        <td className={`px-4 py-3 text-sm text-right font-semibold ${
-                          totalVariance > 0 ? 'text-red-600' : totalVariance < 0 ? 'text-green-600' : 'text-text-secondary'
-                        }`}>
-                          {budgetTotals.budgeted ? (
-                            <>
-                              {totalVariance > 0 ? '+' : ''}{((totalVariance / budgetTotals.budgeted) * 100).toFixed(1)}%
-                            </>
-                          ) : '—'}
-                        </td>
-                        <td></td>
-                      </tr>
-                    </tfoot>
-                  )}
-                </table>
-              </div>
+                            </div>
+
+                            {/* Area actions */}
+                            <div className="flex items-center gap-1 ml-2">
+                              <button
+                                onClick={() => handleMoveArea(area.id, 'up')}
+                                disabled={areaIndex === 0}
+                                className="p-1 text-text-secondary hover:text-primary-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                                title="Move up"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => handleMoveArea(area.id, 'down')}
+                                disabled={areaIndex === budgetAreas.length - 1}
+                                className="p-1 text-text-secondary hover:text-primary-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                                title="Move down"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => setDeleteConfirmId(area.id)}
+                                className="p-1 text-text-secondary hover:text-red-600"
+                                title="Delete area"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Expanded Line Items */}
+                        {isExpanded && (
+                          <div className="px-4 py-3">
+                            {/* Line items table */}
+                            <table className="w-full">
+                              <thead>
+                                <tr className="text-xs text-text-secondary uppercase">
+                                  <th className="text-left py-2 font-medium">Item</th>
+                                  <th className="text-right py-2 font-medium w-28">Budgeted</th>
+                                  <th className="text-right py-2 font-medium w-28">Actual</th>
+                                  <th className="text-right py-2 font-medium w-24">Variance</th>
+                                  <th className="text-center py-2 font-medium w-20">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-border">
+                                {areaLineItems.length > 0 ? (
+                                  areaLineItems.map((lineItem, liIndex) => {
+                                    const liVariance = (lineItem.actual_amount || 0) - (lineItem.budgeted_amount || 0);
+                                    return (
+                                      <tr key={lineItem.id} className="hover:bg-gray-50">
+                                        {/* Item name */}
+                                        <td className="py-2 text-sm">
+                                          {editingLineItemId === `${lineItem.id}-name` ? (
+                                            <input
+                                              type="text"
+                                              defaultValue={lineItem.item_name}
+                                              onBlur={(e) => handleUpdateLineItem(lineItem, 'item_name', e.target.value)}
+                                              onKeyDown={(e) => e.key === 'Enter' && handleUpdateLineItem(lineItem, 'item_name', (e.target as HTMLInputElement).value)}
+                                              className="w-full px-2 py-1 border border-border rounded text-sm"
+                                              autoFocus
+                                            />
+                                          ) : (
+                                            <button
+                                              onClick={() => setEditingLineItemId(`${lineItem.id}-name`)}
+                                              className="text-text-primary hover:text-primary-600 text-left"
+                                            >
+                                              {lineItem.item_name}
+                                            </button>
+                                          )}
+                                        </td>
+                                        {/* Budgeted */}
+                                        <td className="py-2 text-sm text-right">
+                                          {editingLineItemId === `${lineItem.id}-budget` ? (
+                                            <input
+                                              type="number"
+                                              step="0.01"
+                                              defaultValue={lineItem.budgeted_amount || ''}
+                                              onBlur={(e) => handleUpdateLineItem(lineItem, 'budgeted_amount', e.target.value)}
+                                              onKeyDown={(e) => e.key === 'Enter' && handleUpdateLineItem(lineItem, 'budgeted_amount', (e.target as HTMLInputElement).value)}
+                                              className="w-24 px-2 py-1 text-right border border-border rounded text-sm"
+                                              autoFocus
+                                            />
+                                          ) : (
+                                            <button
+                                              onClick={() => setEditingLineItemId(`${lineItem.id}-budget`)}
+                                              className="text-text-primary hover:text-primary-600"
+                                            >
+                                              {formatCurrency(lineItem.budgeted_amount)}
+                                            </button>
+                                          )}
+                                        </td>
+                                        {/* Actual */}
+                                        <td className="py-2 text-sm text-right">
+                                          {editingLineItemId === `${lineItem.id}-actual` ? (
+                                            <input
+                                              type="number"
+                                              step="0.01"
+                                              defaultValue={lineItem.actual_amount || ''}
+                                              onBlur={(e) => handleUpdateLineItem(lineItem, 'actual_amount', e.target.value)}
+                                              onKeyDown={(e) => e.key === 'Enter' && handleUpdateLineItem(lineItem, 'actual_amount', (e.target as HTMLInputElement).value)}
+                                              className="w-24 px-2 py-1 text-right border border-border rounded text-sm"
+                                              autoFocus
+                                            />
+                                          ) : (
+                                            <button
+                                              onClick={() => setEditingLineItemId(`${lineItem.id}-actual`)}
+                                              className="text-text-primary hover:text-primary-600"
+                                            >
+                                              {formatCurrency(lineItem.actual_amount)}
+                                            </button>
+                                          )}
+                                        </td>
+                                        {/* Variance */}
+                                        <td className={`py-2 text-sm text-right ${
+                                          liVariance > 0 ? 'text-red-600' : liVariance < 0 ? 'text-green-600' : 'text-text-secondary'
+                                        }`}>
+                                          {lineItem.budgeted_amount ? (
+                                            <>{liVariance > 0 ? '+' : ''}{formatCurrency(liVariance)}</>
+                                          ) : '—'}
+                                        </td>
+                                        {/* Actions */}
+                                        <td className="py-2 text-sm">
+                                          <div className="flex items-center justify-center gap-1">
+                                            <button
+                                              onClick={() => handleMoveLineItem(lineItem, 'up')}
+                                              disabled={liIndex === 0}
+                                              className="p-1 text-text-secondary hover:text-primary-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                                              title="Move up"
+                                            >
+                                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                              </svg>
+                                            </button>
+                                            <button
+                                              onClick={() => handleMoveLineItem(lineItem, 'down')}
+                                              disabled={liIndex === areaLineItems.length - 1}
+                                              className="p-1 text-text-secondary hover:text-primary-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                                              title="Move down"
+                                            >
+                                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                              </svg>
+                                            </button>
+                                            <button
+                                              onClick={() => setDeleteLineItemConfirmId(lineItem.id)}
+                                              className="p-1 text-text-secondary hover:text-red-600"
+                                              title="Delete item"
+                                            >
+                                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                              </svg>
+                                            </button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })
+                                ) : (
+                                  <tr>
+                                    <td colSpan={5} className="py-4 text-center text-text-secondary text-sm">
+                                      No line items yet. Add one below.
+                                    </td>
+                                  </tr>
+                                )}
+                              </tbody>
+                            </table>
+
+                            {/* Add line item */}
+                            <div className="flex gap-2 mt-3 pt-3 border-t border-border">
+                              <input
+                                type="text"
+                                value={newLineItemName[area.id] || ''}
+                                onChange={(e) => setNewLineItemName((prev) => ({ ...prev, [area.id]: e.target.value }))}
+                                placeholder="+ Add item (e.g., Cabinets, Countertops)"
+                                className="flex-1 px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                                onKeyDown={(e) => e.key === 'Enter' && handleAddLineItem(area.id)}
+                              />
+                              <button
+                                onClick={() => handleAddLineItem(area.id)}
+                                disabled={!newLineItemName[area.id]?.trim() || createLineItem.isPending}
+                                className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors"
+                              >
+                                Add
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {/* Grand Totals */}
+                  <div className="bg-gray-50 rounded-lg border border-border px-4 py-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-text-primary">Grand Total</span>
+                      <div className="flex items-center gap-6 text-sm">
+                        <div className="text-right">
+                          <div className="text-text-secondary text-xs">Budgeted</div>
+                          <div className="font-semibold">{formatCurrency(budgetTotals.budgeted || null)}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-text-secondary text-xs">Actual</div>
+                          <div className="font-semibold">{formatCurrency(budgetTotals.actual || null)}</div>
+                        </div>
+                        <div className="text-right w-24">
+                          <div className="text-text-secondary text-xs">Variance</div>
+                          <div className={`font-semibold ${
+                            totalVariance > 0 ? 'text-red-600' : totalVariance < 0 ? 'text-green-600' : 'text-text-secondary'
+                          }`}>
+                            {budgetTotals.budgeted ? (
+                              <>{totalVariance > 0 ? '+' : ''}{formatCurrency(totalVariance)} ({((totalVariance / budgetTotals.budgeted) * 100).toFixed(1)}%)</>
+                            ) : '—'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="bg-white rounded-lg border border-border px-4 py-8 text-center text-text-secondary text-sm">
+                  No budget areas yet. Add one below.
+                </div>
+              )}
 
               {/* Add new area */}
-              <div className="px-4 py-3 border-t border-border flex gap-2">
+              <div className="bg-white rounded-lg border border-border px-4 py-3 flex gap-2">
                 <input
                   type="text"
                   value={newAreaName}
@@ -585,20 +802,34 @@ export function ProjectDetail() {
                   disabled={!newAreaName.trim() || createBudgetArea.isPending}
                   className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors"
                 >
-                  {createBudgetArea.isPending ? 'Adding...' : 'Add'}
+                  {createBudgetArea.isPending ? 'Adding...' : 'Add Area'}
                 </button>
               </div>
             </div>
           )}
 
-          {/* Delete confirmation dialog */}
+          {/* Delete area confirmation dialog */}
           {deleteConfirmId && (
             <DeleteConfirmDialog
               title="Delete Budget Area"
-              message={`Are you sure you want to delete "${budgetAreas?.find((a) => a.id === deleteConfirmId)?.area_name}"? This cannot be undone.`}
+              message={`Are you sure you want to delete "${budgetAreas?.find((a) => a.id === deleteConfirmId)?.area_name}"? All line items in this area will also be deleted. This cannot be undone.`}
               onConfirm={() => handleDeleteArea(deleteConfirmId)}
               onCancel={() => setDeleteConfirmId(null)}
               isDeleting={deleteBudgetArea.isPending}
+            />
+          )}
+
+          {/* Delete line item confirmation dialog */}
+          {deleteLineItemConfirmId && (
+            <DeleteConfirmDialog
+              title="Delete Line Item"
+              message={`Are you sure you want to delete "${allLineItems?.find((li) => li.id === deleteLineItemConfirmId)?.item_name}"? This cannot be undone.`}
+              onConfirm={() => {
+                const lineItem = allLineItems?.find((li) => li.id === deleteLineItemConfirmId);
+                if (lineItem) handleDeleteLineItem(lineItem);
+              }}
+              onCancel={() => setDeleteLineItemConfirmId(null)}
+              isDeleting={deleteLineItem.isPending}
             />
           )}
         </Tabs.Content>

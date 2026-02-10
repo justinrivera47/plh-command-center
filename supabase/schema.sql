@@ -224,6 +224,18 @@ CREATE TABLE project_budget_areas (
   sort_order INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE budget_line_items (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  budget_area_id UUID NOT NULL REFERENCES project_budget_areas(id) ON DELETE CASCADE,
+  item_name TEXT NOT NULL,
+  budgeted_amount DECIMAL(12, 2),
+  actual_amount DECIMAL(12, 2),
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- ============================================
 -- COMMUNICATION
 -- ============================================
@@ -326,6 +338,7 @@ CREATE INDEX idx_vendors_user_id ON vendors(user_id);
 CREATE INDEX idx_vendors_status ON vendors(status);
 CREATE INDEX idx_change_log_record ON change_log(record_type, record_id);
 CREATE INDEX idx_rfi_activity_log_rfi_id ON rfi_activity_log(rfi_id);
+CREATE INDEX idx_budget_line_items_area_id ON budget_line_items(budget_area_id);
 
 -- ============================================
 -- ROW LEVEL SECURITY
@@ -446,6 +459,41 @@ CREATE POLICY "Users can delete own project budget areas"
     SELECT 1 FROM projects WHERE projects.id = project_budget_areas.project_id AND projects.user_id = auth.uid()
   ));
 
+-- Budget line items: access via budget area -> project ownership
+ALTER TABLE budget_line_items ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own budget line items"
+  ON budget_line_items FOR SELECT
+  USING (EXISTS (
+    SELECT 1 FROM project_budget_areas pba
+    JOIN projects p ON p.id = pba.project_id
+    WHERE pba.id = budget_line_items.budget_area_id AND p.user_id = auth.uid()
+  ));
+
+CREATE POLICY "Users can insert own budget line items"
+  ON budget_line_items FOR INSERT
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM project_budget_areas pba
+    JOIN projects p ON p.id = pba.project_id
+    WHERE pba.id = budget_line_items.budget_area_id AND p.user_id = auth.uid()
+  ));
+
+CREATE POLICY "Users can update own budget line items"
+  ON budget_line_items FOR UPDATE
+  USING (EXISTS (
+    SELECT 1 FROM project_budget_areas pba
+    JOIN projects p ON p.id = pba.project_id
+    WHERE pba.id = budget_line_items.budget_area_id AND p.user_id = auth.uid()
+  ));
+
+CREATE POLICY "Users can delete own budget line items"
+  ON budget_line_items FOR DELETE
+  USING (EXISTS (
+    SELECT 1 FROM project_budget_areas pba
+    JOIN projects p ON p.id = pba.project_id
+    WHERE pba.id = budget_line_items.budget_area_id AND p.user_id = auth.uid()
+  ));
+
 -- Change log: users can view/insert their own changes
 CREATE POLICY "Users can view own change log"
   ON change_log FOR SELECT
@@ -536,6 +584,11 @@ CREATE TRIGGER update_rfis_updated_at
 
 CREATE TRIGGER update_quotes_updated_at
   BEFORE UPDATE ON quotes
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_budget_line_items_updated_at
+  BEFORE UPDATE ON budget_line_items
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
