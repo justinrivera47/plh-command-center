@@ -109,6 +109,7 @@ function LogQuoteForm() {
   const { data: vendors } = useVendors();
   const createQuote = useCreateQuote();
   const closeQuickEntry = useUIStore((state) => state.closeQuickEntry);
+  const selectedProjectId = useUIStore((state) => state.selectedProjectId);
 
   const {
     register,
@@ -117,6 +118,9 @@ function LogQuoteForm() {
     watch,
   } = useForm<LogQuoteFormData>({
     resolver: zodResolver(logQuoteSchema),
+    defaultValues: {
+      project_id: selectedProjectId || '',
+    },
   });
 
   const vendorId = watch('vendor_id');
@@ -410,6 +414,7 @@ function NewRFIForm() {
   const { data: projects } = useActiveProjects();
   const createRFI = useCreateRFI();
   const closeQuickEntry = useUIStore((state) => state.closeQuickEntry);
+  const selectedProjectId = useUIStore((state) => state.selectedProjectId);
 
   const {
     register,
@@ -419,6 +424,7 @@ function NewRFIForm() {
   } = useForm<NewRFIFormData>({
     resolver: zodResolver(newRFISchema),
     defaultValues: {
+      project_id: selectedProjectId || '',
       priority: 'P3',
       is_blocking: false,
     },

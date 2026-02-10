@@ -34,6 +34,7 @@ export function ProjectDetail() {
   const { data: budgetAreas, isLoading: budgetLoading } = useProjectBudgetAreas(projectId);
   const { data: activity, isLoading: activityLoading } = useProjectActivity(projectId);
   const openQuickEntry = useUIStore((state) => state.openQuickEntry);
+  const setSelectedProjectId = useUIStore((state) => state.setSelectedProjectId);
   const openQuoteDrawer = useUIStore((state) => state.openQuoteDrawer);
   const updateQuote = useUpdateQuoteWithLog();
   const createBudgetArea = useCreateBudgetArea();
@@ -42,6 +43,14 @@ export function ProjectDetail() {
   const [taskStatusFilter, setTaskStatusFilter] = useState<'all' | 'open' | 'completed' | 'dead'>('open');
   const [newAreaName, setNewAreaName] = useState('');
   const [editingAreaId, setEditingAreaId] = useState<string | null>(null);
+
+  // Helper to open quick entry with project context
+  const openQuickEntryWithProject = (type: 'quote' | 'rfi' | 'status' | 'call' | 'vendor') => {
+    if (projectId) {
+      setSelectedProjectId(projectId);
+    }
+    openQuickEntry(type);
+  };
 
   const formatCurrency = (amount: number | null) => {
     if (amount === null || amount === undefined) return '—';
@@ -240,7 +249,7 @@ export function ProjectDetail() {
               title="No tasks yet"
               description="Add your first task for this project."
               actionLabel="Add Task"
-              onAction={() => openQuickEntry('rfi')}
+              onAction={() => openQuickEntryWithProject('rfi')}
             />
           )}
           {!rfisLoading && sortedWarRoomItems.length > 0 && (
@@ -261,7 +270,7 @@ export function ProjectDetail() {
               title="No quotes yet"
               description="Log your first quote for this project."
               actionLabel="Log Quote"
-              onAction={() => openQuickEntry('quote')}
+              onAction={() => openQuickEntryWithProject('quote')}
             />
           )}
           {!quotesLoading && hasQuotes && (
