@@ -193,11 +193,11 @@ plh-command-center/
 - [x] Activity log recording for status changes
 - [ ] Inline editing component (Phase 8)
 
-### Phase 6: Communication + Stall Detection
-- [ ] Message templates
-- [ ] Message composer modal
-- [ ] Stall detection logic
-- [ ] Auto-prompts for stalled tasks
+### Phase 6: Communication + Stall Detection ✅
+- [x] Message templates hook with interpolation
+- [x] Message composer modal
+- [x] Stall detection logic
+- [x] Auto-prompts for stalled tasks (StallPrompt, StallIndicator)
 
 ### Phase 7: Boss View + Export
 - [ ] Boss view dashboard
