@@ -205,14 +205,15 @@ plh-command-center/
 - [x] Budget progress bars with variance tracking
 - [x] Excel export with SheetJS (multi-sheet reports)
 
-### Phase 8: Settings + Polish
-- [ ] Settings page
-- [ ] Follow-up preferences
-- [ ] Trade category management
-- [ ] Empty states
-- [ ] Error handling
-- [ ] Loading skeletons
-- [ ] Responsive QA
+### Phase 8: Settings + Polish ✅
+- [x] Settings page
+- [x] Follow-up preferences (days per contact type)
+- [x] Empty states (all views)
+- [x] Error handling (all views)
+- [x] Loading skeletons (all views)
+- [ ] Trade category management (future enhancement)
+- [ ] Vendor profile pages (future enhancement)
+- [ ] Inline editing component (future enhancement)
 
 ---
 
