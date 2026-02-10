@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { useVendor, useVendorTrades, useUpdateVendor } from '../../hooks/useVendors';
@@ -24,28 +24,30 @@ export function VendorDetail() {
     reset,
   } = useForm({
     defaultValues: {
-      company_name: vendor?.company_name || '',
-      poc_name: vendor?.poc_name || '',
-      phone: vendor?.phone || '',
-      email: vendor?.email || '',
-      quality_rating: vendor?.quality_rating || 'unknown',
-      communication_rating: vendor?.communication_rating || 'unknown',
-      notes: vendor?.notes || '',
+      company_name: '',
+      poc_name: '',
+      phone: '',
+      email: '',
+      quality_rating: 'unknown' as Rating,
+      communication_rating: 'unknown' as Rating,
+      notes: '',
     },
   });
 
   // Reset form when vendor data loads
-  if (vendor && !isEditing) {
-    reset({
-      company_name: vendor.company_name,
-      poc_name: vendor.poc_name || '',
-      phone: vendor.phone || '',
-      email: vendor.email || '',
-      quality_rating: vendor.quality_rating,
-      communication_rating: vendor.communication_rating,
-      notes: vendor.notes || '',
-    });
-  }
+  useEffect(() => {
+    if (vendor) {
+      reset({
+        company_name: vendor.company_name,
+        poc_name: vendor.poc_name || '',
+        phone: vendor.phone || '',
+        email: vendor.email || '',
+        quality_rating: vendor.quality_rating,
+        communication_rating: vendor.communication_rating,
+        notes: vendor.notes || '',
+      });
+    }
+  }, [vendor, reset]);
 
   const onSubmit = async (data: any) => {
     if (!vendorId) return;

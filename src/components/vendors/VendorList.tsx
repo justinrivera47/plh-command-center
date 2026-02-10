@@ -12,16 +12,23 @@ export function VendorList() {
   const [tradeFilter, setTradeFilter] = useState<string | null>(null);
   const openQuickEntry = useUIStore((state) => state.openQuickEntry);
 
-  // Filter vendors by search term
+  // Get selected trade name for filtering
+  const selectedTradeName = tradeFilter
+    ? trades?.find((t) => t.id === tradeFilter)?.name
+    : null;
+
+  // Filter vendors by search term and trade
   const filteredVendors = vendors?.filter((vendor) => {
     const matchesSearch =
       !searchTerm ||
       vendor.company_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       vendor.poc_name?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    // Note: Trade filtering would require joining with vendor_trades
-    // For now, we just filter by search term
-    return matchesSearch;
+    const matchesTrade =
+      !selectedTradeName ||
+      vendor.trades.includes(selectedTradeName);
+
+    return matchesSearch && matchesTrade;
   });
 
   return (
@@ -87,14 +94,14 @@ export function VendorList() {
       {!isLoading && filteredVendors && filteredVendors.length === 0 && (
         <EmptyState
           icon="📇"
-          title={searchTerm ? 'No vendors found' : 'No vendors yet'}
+          title={searchTerm || tradeFilter ? 'No vendors found' : 'No vendors yet'}
           description={
-            searchTerm
-              ? 'Try a different search term'
+            searchTerm || tradeFilter
+              ? 'Try a different search term or filter'
               : 'Add your first vendor to start building your database.'
           }
-          actionLabel={searchTerm ? undefined : 'Add Vendor'}
-          onAction={searchTerm ? undefined : () => openQuickEntry('vendor')}
+          actionLabel={searchTerm || tradeFilter ? undefined : 'Add Vendor'}
+          onAction={searchTerm || tradeFilter ? undefined : () => openQuickEntry('vendor')}
         />
       )}
 
