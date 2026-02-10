@@ -1,48 +1,168 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
-import type { UserRole } from '../../lib/types';
+import type { Project, RFIStatus, StallReason } from '../../lib/types';
+import type { RoleSelectFormData, AddProjectsFormData, FirstFireFormData } from '../../lib/schemas';
 
-type Step = 'welcome' | 'role' | 'settings' | 'complete';
+import { RoleSelect } from './RoleSelect';
+import { AddProjects } from './AddProjects';
+import { FirstFire } from './FirstFire';
+import { ImportOrSkip } from './ImportOrSkip';
+import { OnboardingDone } from './OnboardingDone';
 
-const ROLES: { value: UserRole; label: string; description: string }[] = [
-  {
-    value: 'project_coordinator',
-    label: 'Project Coordinator',
-    description: 'I manage projects and coordinate between clients, vendors, and contractors',
-  },
-  {
-    value: 'builder_gc',
-    label: 'Builder / General Contractor',
-    description: 'I oversee construction and manage subcontractors',
-  },
-  {
-    value: 'designer_architect',
-    label: 'Designer / Architect',
-    description: 'I design spaces and specify materials and finishes',
-  },
-  {
-    value: 'other',
-    label: 'Other',
-    description: 'My role is different from the above',
-  },
-];
+type Step = 'role' | 'projects' | 'first-fire' | 'import' | 'done';
+
+const STEPS: Step[] = ['role', 'projects', 'first-fire', 'import', 'done'];
+
+// Map blocking type to RFI status and stall reason
+function mapBlockingTypeToRFI(blockingType: FirstFireFormData['blocking_type']): {
+  status: RFIStatus;
+  stall_reason: StallReason | null;
+} {
+  switch (blockingType) {
+    case 'waiting_on_someone':
+      return { status: 'waiting_on_client', stall_reason: 'avoiding_contact' };
+    case 'missing_info':
+      return { status: 'waiting_on_me', stall_reason: 'missing_info' };
+    case 'havent_started':
+      return { status: 'waiting_on_me', stall_reason: 'deprioritized' };
+    case 'unclear_next_step':
+      return { status: 'waiting_on_me', stall_reason: 'unclear_next_step' };
+    default:
+      return { status: 'open', stall_reason: null };
+  }
+}
 
 export function OnboardingWizard() {
-  const navigate = useNavigate();
   const { user } = useAuth();
-
-  const [step, setStep] = useState<Step>('welcome');
-  const [role, setRole] = useState<UserRole | null>(null);
-  const [followUpDays, setFollowUpDays] = useState({
-    client: 3,
-    vendor: 5,
-    contractor: 3,
-  });
+  const [currentStep, setCurrentStep] = useState<Step>('role');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Collected data across steps
+  const [role, setRole] = useState<RoleSelectFormData['role'] | null>(null);
+  const [createdProjects, setCreatedProjects] = useState<Project[]>([]);
+  const [hasFirstFire, setHasFirstFire] = useState(false);
+
+  const currentStepIndex = STEPS.indexOf(currentStep);
+
+  // Step 1: Save role
+  async function handleRoleSelect(data: RoleSelectFormData) {
+    if (!user) return;
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      const { error: updateError } = await supabase
+        .from('user_profiles')
+        .update({ role: data.role })
+        .eq('id', user.id);
+
+      if (updateError) throw updateError;
+
+      setRole(data.role);
+      setCurrentStep('projects');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save role');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Step 2: Save projects
+  async function handleAddProjects(data: AddProjectsFormData) {
+    if (!user) return;
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      const projectsToInsert = data.projects.map((p) => ({
+        user_id: user.id,
+        name: p.name,
+        client_name: p.client_name,
+        address: p.address || null,
+        client_email: p.client_email || null,
+        client_phone: p.client_phone || null,
+        total_budget: p.total_budget || null,
+        status: 'active' as const,
+      }));
+
+      const { data: insertedProjects, error: insertError } = await supabase
+        .from('projects')
+        .insert(projectsToInsert)
+        .select();
+
+      if (insertError) throw insertError;
+
+      setCreatedProjects(insertedProjects as Project[]);
+      setCurrentStep('first-fire');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save projects');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Step 3: Save first fire (first RFI)
+  async function handleFirstFire(data: FirstFireFormData) {
+    if (!user) return;
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      const { status, stall_reason } = mapBlockingTypeToRFI(data.blocking_type);
+
+      // Determine POC type based on blocking type selection
+      let pocType = data.poc_type || null;
+      if (data.blocking_type === 'waiting_on_someone' && data.poc_type) {
+        pocType = data.poc_type;
+      }
+
+      // Build scope from missing_info if applicable
+      let scope = null;
+      if (data.blocking_type === 'missing_info' && data.missing_info) {
+        scope = `Missing: ${data.missing_info}`;
+      }
+
+      const rfiToInsert = {
+        user_id: user.id,
+        project_id: data.project_id,
+        task: data.task,
+        scope,
+        poc_type: pocType,
+        poc_name: data.poc_name || null,
+        status,
+        priority: 'P1' as const,
+        stall_reason,
+        is_blocking: false,
+        is_complete: false,
+        follow_up_days: 3,
+      };
+
+      const { error: insertError } = await supabase.from('rfis').insert(rfiToInsert);
+
+      if (insertError) throw insertError;
+
+      setHasFirstFire(true);
+      setCurrentStep('import');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save task');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Step 4: Handle import or skip
+  async function handleImportOrSkip(_imported: boolean) {
+    // For now, just proceed to done step
+    // Full CSV import can be added later
+    await completeOnboarding();
+  }
+
+  // Final: Complete onboarding
   async function completeOnboarding() {
     if (!user) return;
 
@@ -52,235 +172,105 @@ export function OnboardingWizard() {
     try {
       const { error: updateError } = await supabase
         .from('user_profiles')
-        .update({
-          role,
-          follow_up_days_client: followUpDays.client,
-          follow_up_days_vendor: followUpDays.vendor,
-          follow_up_days_contractor: followUpDays.contractor,
-          onboarding_completed: true,
-        })
+        .update({ onboarding_completed: true })
         .eq('id', user.id);
 
       if (updateError) throw updateError;
 
-      setStep('complete');
-      // Brief delay to show completion, then redirect
-      setTimeout(() => {
-        navigate('/');
-      }, 1500);
+      setCurrentStep('done');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save settings');
+      setError(err instanceof Error ? err.message : 'Failed to complete onboarding');
+    } finally {
       setSaving(false);
+    }
+  }
+
+  function goBack() {
+    const prevIndex = currentStepIndex - 1;
+    if (prevIndex >= 0) {
+      setCurrentStep(STEPS[prevIndex]);
     }
   }
 
   return (
     <div className="min-h-screen bg-surface-secondary flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
-        {/* Progress indicator */}
-        <div className="flex justify-center mb-8">
-          <div className="flex items-center gap-2">
-            {['welcome', 'role', 'settings'].map((s, i) => (
-              <div key={s} className="flex items-center">
-                <div
-                  className={`w-3 h-3 rounded-full transition-colors ${
-                    step === s || ['role', 'settings'].indexOf(step) > ['welcome', 'role', 'settings'].indexOf(s)
-                      ? 'bg-primary-600'
-                      : 'bg-gray-300'
-                  }`}
-                />
-                {i < 2 && (
+        {/* Progress indicator - show for steps 1-4, not for done */}
+        {currentStep !== 'done' && (
+          <div className="flex justify-center mb-8">
+            <div className="flex items-center gap-2">
+              {STEPS.slice(0, -1).map((step, i) => (
+                <div key={step} className="flex items-center">
                   <div
-                    className={`w-12 h-0.5 transition-colors ${
-                      ['role', 'settings'].indexOf(step) > i ? 'bg-primary-600' : 'bg-gray-300'
+                    className={`w-3 h-3 rounded-full transition-colors ${
+                      i <= currentStepIndex ? 'bg-primary-600' : 'bg-gray-300'
                     }`}
                   />
-                )}
-              </div>
-            ))}
+                  {i < STEPS.length - 2 && (
+                    <div
+                      className={`w-8 h-0.5 transition-colors ${
+                        i < currentStepIndex ? 'bg-primary-600' : 'bg-gray-300'
+                      }`}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="bg-white rounded-lg shadow-sm border border-border p-6 md:p-8">
+          {/* Error display */}
+          {error && (
+            <div className="bg-red-50 text-red-600 text-sm p-3 rounded-md mb-4">
+              {error}
+            </div>
+          )}
+
+          {/* Loading overlay */}
+          {saving && (
+            <div className="absolute inset-0 bg-white/50 flex items-center justify-center rounded-lg">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+            </div>
+          )}
+
+          {/* Step content */}
+          <div className={saving ? 'opacity-50 pointer-events-none' : ''}>
+            {currentStep === 'role' && (
+              <RoleSelect onNext={handleRoleSelect} defaultValue={role || undefined} />
+            )}
+
+            {currentStep === 'projects' && (
+              <AddProjects onNext={handleAddProjects} onBack={goBack} />
+            )}
+
+            {currentStep === 'first-fire' && (
+              <FirstFire
+                projects={createdProjects}
+                onNext={handleFirstFire}
+                onBack={goBack}
+              />
+            )}
+
+            {currentStep === 'import' && (
+              <ImportOrSkip onNext={handleImportOrSkip} onBack={goBack} />
+            )}
+
+            {currentStep === 'done' && (
+              <OnboardingDone
+                projectCount={createdProjects.length}
+                hasFirstFire={hasFirstFire}
+              />
+            )}
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-border p-8">
-          {/* Welcome Step */}
-          {step === 'welcome' && (
-            <div className="text-center">
-              <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <svg className="w-8 h-8 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                </svg>
-              </div>
-              <h1 className="text-2xl font-bold text-text-primary mb-2">
-                Welcome to PLH Command Center
-              </h1>
-              <p className="text-text-secondary mb-8">
-                Let's get you set up in just a couple of steps. This will help us personalize your experience.
-              </p>
-              <button
-                onClick={() => setStep('role')}
-                className="bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-8 rounded-md transition-colors"
-              >
-                Get Started
-              </button>
-            </div>
-          )}
-
-          {/* Role Selection Step */}
-          {step === 'role' && (
-            <div>
-              <h2 className="text-xl font-bold text-text-primary mb-2">
-                What's your role?
-              </h2>
-              <p className="text-text-secondary mb-6">
-                This helps us tailor the experience to your workflow.
-              </p>
-
-              <div className="space-y-3 mb-8">
-                {ROLES.map((r) => (
-                  <button
-                    key={r.value}
-                    onClick={() => setRole(r.value)}
-                    className={`w-full text-left p-4 rounded-lg border-2 transition-colors ${
-                      role === r.value
-                        ? 'border-primary-600 bg-primary-50'
-                        : 'border-border hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="font-medium text-text-primary">{r.label}</div>
-                    <div className="text-sm text-text-secondary">{r.description}</div>
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex justify-between">
-                <button
-                  onClick={() => setStep('welcome')}
-                  className="text-text-secondary hover:text-text-primary font-medium py-2 px-4"
-                >
-                  Back
-                </button>
-                <button
-                  onClick={() => setStep('settings')}
-                  disabled={!role}
-                  className="bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-6 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Continue
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Settings Step */}
-          {step === 'settings' && (
-            <div>
-              <h2 className="text-xl font-bold text-text-primary mb-2">
-                Follow-up Preferences
-              </h2>
-              <p className="text-text-secondary mb-6">
-                Set your default follow-up reminders. You can change these later.
-              </p>
-
-              {error && (
-                <div className="bg-red-50 text-red-600 text-sm p-3 rounded-md mb-4">
-                  {error}
-                </div>
-              )}
-
-              <div className="space-y-4 mb-8">
-                <div>
-                  <label className="block text-sm font-medium text-text-primary mb-1">
-                    Client follow-up (days)
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={30}
-                    value={followUpDays.client}
-                    onChange={(e) =>
-                      setFollowUpDays((prev) => ({ ...prev, client: parseInt(e.target.value) || 3 }))
-                    }
-                    className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  />
-                  <p className="text-xs text-text-secondary mt-1">
-                    Remind me if I haven't heard from a client in this many days
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-text-primary mb-1">
-                    Vendor follow-up (days)
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={30}
-                    value={followUpDays.vendor}
-                    onChange={(e) =>
-                      setFollowUpDays((prev) => ({ ...prev, vendor: parseInt(e.target.value) || 5 }))
-                    }
-                    className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  />
-                  <p className="text-xs text-text-secondary mt-1">
-                    Remind me if I haven't heard from a vendor in this many days
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-text-primary mb-1">
-                    Contractor follow-up (days)
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={30}
-                    value={followUpDays.contractor}
-                    onChange={(e) =>
-                      setFollowUpDays((prev) => ({ ...prev, contractor: parseInt(e.target.value) || 3 }))
-                    }
-                    className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  />
-                  <p className="text-xs text-text-secondary mt-1">
-                    Remind me if I haven't heard from a contractor in this many days
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex justify-between">
-                <button
-                  onClick={() => setStep('role')}
-                  disabled={saving}
-                  className="text-text-secondary hover:text-text-primary font-medium py-2 px-4 disabled:opacity-50"
-                >
-                  Back
-                </button>
-                <button
-                  onClick={completeOnboarding}
-                  disabled={saving}
-                  className="bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-6 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {saving ? 'Saving...' : 'Complete Setup'}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Complete Step */}
-          {step === 'complete' && (
-            <div className="text-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <h1 className="text-2xl font-bold text-text-primary mb-2">
-                You're All Set!
-              </h1>
-              <p className="text-text-secondary">
-                Taking you to your command center...
-              </p>
-            </div>
-          )}
-        </div>
+        {/* Step indicator text */}
+        {currentStep !== 'done' && (
+          <p className="text-center text-sm text-text-secondary mt-4">
+            Step {currentStepIndex + 1} of {STEPS.length - 1}
+          </p>
+        )}
       </div>
     </div>
   );
