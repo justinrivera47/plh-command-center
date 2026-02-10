@@ -51,7 +51,7 @@ export function BossView() {
           <h1 className="text-xl font-semibold text-text-primary">Boss View</h1>
           <p className="text-sm text-text-secondary">Executive summary of all projects</p>
         </div>
-        <ExportButton projects={projects} tasks={tasks} quotes={quotes} budgetTotalsByProject={budgetTotalsByProject} />
+        <ExportButton />
       </div>
 
       {/* Overall Stats */}
