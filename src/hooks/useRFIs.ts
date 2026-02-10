@@ -107,6 +107,74 @@ export function useUpdateRFI() {
   });
 }
 
+// Update RFI status with activity log
+export function useUpdateRFIStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      rfi_id,
+      new_status,
+      note,
+      next_action_date,
+    }: {
+      rfi_id: string;
+      new_status: RFI['status'];
+      note?: string;
+      next_action_date?: string;
+    }) => {
+      // Get current RFI to log previous status
+      const { data: currentRFI, error: fetchError } = await supabase
+        .from('rfis')
+        .select('status')
+        .eq('id', rfi_id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Update RFI
+      const updates: Partial<RFI> = {
+        status: new_status,
+        latest_update: note || null,
+        last_contacted_at: new Date().toISOString(),
+        is_complete: new_status === 'completed',
+      };
+
+      if (next_action_date) {
+        updates.next_action_date = next_action_date;
+      }
+
+      const { data: updatedRFI, error: updateError } = await supabase
+        .from('rfis')
+        .update(updates)
+        .eq('id', rfi_id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+
+      // Log activity
+      const { error: logError } = await supabase
+        .from('rfi_activity_log')
+        .insert({
+          rfi_id,
+          previous_status: currentRFI.status,
+          new_status,
+          note: note || null,
+          source: 'quick_entry',
+        });
+
+      if (logError) throw logError;
+
+      return updatedRFI as RFI;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rfis'] });
+      queryClient.invalidateQueries({ queryKey: ['war-room'] });
+    },
+  });
+}
+
 // Get RFI counts for a project (for badges)
 export function useProjectRFICounts(projectId: string) {
   return useQuery({

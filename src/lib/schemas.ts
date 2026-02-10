@@ -51,8 +51,8 @@ export const newRFISchema = z.object({
   scope: z.string().optional(),
   poc_name: z.string().optional(),
   poc_type: z.enum(['client', 'vendor', 'contractor', 'internal']).optional(),
-  priority: z.enum(['P1', 'P2', 'P3']).default('P3'),
-  is_blocking: z.boolean().default(false),
+  priority: z.enum(['P1', 'P2', 'P3']),
+  is_blocking: z.boolean(),
   blocks_description: z.string().optional(),
 });
 
