@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import * as Tabs from '@radix-ui/react-tabs';
-import { useProject, useProjectBudgetAreas, useProjectActivity, useCreateBudgetArea, useUpdateBudgetArea } from '../../hooks/useProjects';
+import { useProject, useProjectBudgetAreas, useProjectActivity, useCreateBudgetArea, useUpdateBudgetArea, useDeleteBudgetArea, useReorderBudgetAreas } from '../../hooks/useProjects';
 import { useRFIs } from '../../hooks/useRFIs';
 import { useQuotesByTrade, useUpdateQuoteWithLog } from '../../hooks/useQuotes';
 import { useAuth } from '../../hooks/useAuth';
 import { TaskCard } from '../war-room/TaskCard';
 import { EmptyState } from '../shared/EmptyState';
 import { SkeletonList } from '../shared/SkeletonCard';
+import { DeleteConfirmDialog } from '../shared/DeleteConfirmDialog';
 import { useUIStore } from '../../stores/uiStore';
 import { QUOTE_STATUS_CONFIG } from '../../lib/constants';
 import { QuoteDetailDrawer } from '../quotes/QuoteDetailDrawer';
@@ -39,10 +40,14 @@ export function ProjectDetail() {
   const updateQuote = useUpdateQuoteWithLog();
   const createBudgetArea = useCreateBudgetArea();
   const updateBudgetArea = useUpdateBudgetArea();
+  const deleteBudgetArea = useDeleteBudgetArea();
+  const reorderBudgetAreas = useReorderBudgetAreas();
 
   const [taskStatusFilter, setTaskStatusFilter] = useState<'all' | 'open' | 'completed' | 'dead'>('open');
   const [newAreaName, setNewAreaName] = useState('');
   const [editingAreaId, setEditingAreaId] = useState<string | null>(null);
+  const [editingAreaNameId, setEditingAreaNameId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // Helper to open quick entry with project context
   const openQuickEntryWithProject = (type: 'quote' | 'rfi' | 'status' | 'call' | 'vendor') => {
@@ -154,26 +159,70 @@ export function ProjectDetail() {
   };
 
   const handleAddBudgetArea = async () => {
-    if (!newAreaName.trim() || !projectId) return;
+    if (!newAreaName.trim() || !projectId || !user) return;
     await createBudgetArea.mutateAsync({
       project_id: projectId,
       area_name: newAreaName.trim(),
       budgeted_amount: null,
       actual_amount: null,
       sort_order: (budgetAreas?.length || 0) + 1,
+      userId: user.id,
     });
     setNewAreaName('');
   };
 
-  const handleUpdateBudgetArea = async (area: ProjectBudgetArea, field: 'budgeted_amount' | 'actual_amount', value: string) => {
-    if (!projectId) return;
-    const numValue = value ? parseFloat(value) : null;
-    await updateBudgetArea.mutateAsync({
-      id: area.id,
+  const handleUpdateBudgetArea = async (area: ProjectBudgetArea, field: 'budgeted_amount' | 'actual_amount' | 'area_name', value: string) => {
+    if (!projectId || !user) return;
+
+    if (field === 'area_name') {
+      if (!value.trim()) return;
+      await updateBudgetArea.mutateAsync({
+        id: area.id,
+        project_id: projectId,
+        area_name: value.trim(),
+        userId: user.id,
+      });
+      setEditingAreaNameId(null);
+    } else {
+      const numValue = value ? parseFloat(value) : null;
+      await updateBudgetArea.mutateAsync({
+        id: area.id,
+        project_id: projectId,
+        [field]: numValue,
+        userId: user.id,
+      });
+      setEditingAreaId(null);
+    }
+  };
+
+  const handleDeleteArea = async (areaId: string) => {
+    const area = budgetAreas?.find((a) => a.id === areaId);
+    if (!area || !user || !projectId) return;
+
+    await deleteBudgetArea.mutateAsync({
+      id: areaId,
       project_id: projectId,
-      [field]: numValue,
+      userId: user.id,
+      areaData: area,
     });
-    setEditingAreaId(null);
+    setDeleteConfirmId(null);
+  };
+
+  const handleMoveArea = async (areaId: string, direction: 'up' | 'down') => {
+    if (!budgetAreas || !projectId) return;
+
+    const currentIndex = budgetAreas.findIndex((a) => a.id === areaId);
+    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+
+    if (newIndex < 0 || newIndex >= budgetAreas.length) return;
+
+    const newOrder = [...budgetAreas];
+    [newOrder[currentIndex], newOrder[newIndex]] = [newOrder[newIndex], newOrder[currentIndex]];
+
+    await reorderBudgetAreas.mutateAsync({
+      project_id: projectId,
+      orderedIds: newOrder.map((a) => a.id),
+    });
   };
 
   const hasQuotes = groupedQuotes && Object.keys(groupedQuotes).length > 0;
@@ -342,98 +391,184 @@ export function ProjectDetail() {
           {!budgetLoading && (
             <div className="bg-white rounded-lg border border-border overflow-hidden">
               {/* Budget table */}
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-border">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary uppercase">Area</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-text-secondary uppercase">Budgeted</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-text-secondary uppercase">Actual</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-text-secondary uppercase">Variance</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {budgetAreas && budgetAreas.length > 0 ? (
-                    budgetAreas.map((area) => {
-                      const variance = (area.actual_amount || 0) - (area.budgeted_amount || 0);
-                      return (
-                        <tr key={area.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-sm text-text-primary">{area.area_name}</td>
-                          <td className="px-4 py-3 text-sm text-right">
-                            {editingAreaId === `${area.id}-budget` ? (
-                              <input
-                                type="number"
-                                step="0.01"
-                                defaultValue={area.budgeted_amount || ''}
-                                onBlur={(e) => handleUpdateBudgetArea(area, 'budgeted_amount', e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleUpdateBudgetArea(area, 'budgeted_amount', (e.target as HTMLInputElement).value)}
-                                className="w-24 px-2 py-1 text-right border border-border rounded text-sm"
-                                autoFocus
-                              />
-                            ) : (
-                              <button
-                                onClick={() => setEditingAreaId(`${area.id}-budget`)}
-                                className="text-text-primary hover:text-primary-600"
-                              >
-                                {formatCurrency(area.budgeted_amount)}
-                              </button>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-right">
-                            {editingAreaId === `${area.id}-actual` ? (
-                              <input
-                                type="number"
-                                step="0.01"
-                                defaultValue={area.actual_amount || ''}
-                                onBlur={(e) => handleUpdateBudgetArea(area, 'actual_amount', e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleUpdateBudgetArea(area, 'actual_amount', (e.target as HTMLInputElement).value)}
-                                className="w-24 px-2 py-1 text-right border border-border rounded text-sm"
-                                autoFocus
-                              />
-                            ) : (
-                              <button
-                                onClick={() => setEditingAreaId(`${area.id}-actual`)}
-                                className="text-text-primary hover:text-primary-600"
-                              >
-                                {formatCurrency(area.actual_amount)}
-                              </button>
-                            )}
-                          </td>
-                          <td className={`px-4 py-3 text-sm text-right font-medium ${
-                            variance > 0 ? 'text-red-600' : variance < 0 ? 'text-green-600' : 'text-text-secondary'
-                          }`}>
-                            {area.budgeted_amount ? (
-                              <>
-                                {variance > 0 ? '+' : ''}{formatCurrency(variance)}
-                              </>
-                            ) : '—'}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-border">
                     <tr>
-                      <td colSpan={4} className="px-4 py-8 text-center text-text-secondary text-sm">
-                        No budget areas yet. Add one below.
-                      </td>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary uppercase">Area</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-text-secondary uppercase">Budgeted</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-text-secondary uppercase">Actual</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-text-secondary uppercase">Variance</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-text-secondary uppercase">%</th>
+                      <th className="px-2 py-3 text-center text-xs font-medium text-text-secondary uppercase w-24">Actions</th>
                     </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {budgetAreas && budgetAreas.length > 0 ? (
+                      budgetAreas.map((area, index) => {
+                        const variance = (area.actual_amount || 0) - (area.budgeted_amount || 0);
+                        const variancePercent = area.budgeted_amount
+                          ? ((variance / area.budgeted_amount) * 100)
+                          : 0;
+                        return (
+                          <tr key={area.id} className="hover:bg-gray-50">
+                            {/* Area name - editable */}
+                            <td className="px-4 py-3 text-sm">
+                              {editingAreaNameId === area.id ? (
+                                <input
+                                  type="text"
+                                  defaultValue={area.area_name}
+                                  onBlur={(e) => handleUpdateBudgetArea(area, 'area_name', e.target.value)}
+                                  onKeyDown={(e) => e.key === 'Enter' && handleUpdateBudgetArea(area, 'area_name', (e.target as HTMLInputElement).value)}
+                                  className="w-full px-2 py-1 border border-border rounded text-sm"
+                                  autoFocus
+                                />
+                              ) : (
+                                <button
+                                  onClick={() => setEditingAreaNameId(area.id)}
+                                  className="text-text-primary hover:text-primary-600 text-left"
+                                >
+                                  {area.area_name}
+                                </button>
+                              )}
+                            </td>
+                            {/* Budgeted amount */}
+                            <td className="px-4 py-3 text-sm text-right">
+                              {editingAreaId === `${area.id}-budget` ? (
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  defaultValue={area.budgeted_amount || ''}
+                                  onBlur={(e) => handleUpdateBudgetArea(area, 'budgeted_amount', e.target.value)}
+                                  onKeyDown={(e) => e.key === 'Enter' && handleUpdateBudgetArea(area, 'budgeted_amount', (e.target as HTMLInputElement).value)}
+                                  className="w-24 px-2 py-1 text-right border border-border rounded text-sm"
+                                  autoFocus
+                                />
+                              ) : (
+                                <button
+                                  onClick={() => setEditingAreaId(`${area.id}-budget`)}
+                                  className="text-text-primary hover:text-primary-600"
+                                >
+                                  {formatCurrency(area.budgeted_amount)}
+                                </button>
+                              )}
+                            </td>
+                            {/* Actual amount */}
+                            <td className="px-4 py-3 text-sm text-right">
+                              {editingAreaId === `${area.id}-actual` ? (
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  defaultValue={area.actual_amount || ''}
+                                  onBlur={(e) => handleUpdateBudgetArea(area, 'actual_amount', e.target.value)}
+                                  onKeyDown={(e) => e.key === 'Enter' && handleUpdateBudgetArea(area, 'actual_amount', (e.target as HTMLInputElement).value)}
+                                  className="w-24 px-2 py-1 text-right border border-border rounded text-sm"
+                                  autoFocus
+                                />
+                              ) : (
+                                <button
+                                  onClick={() => setEditingAreaId(`${area.id}-actual`)}
+                                  className="text-text-primary hover:text-primary-600"
+                                >
+                                  {formatCurrency(area.actual_amount)}
+                                </button>
+                              )}
+                            </td>
+                            {/* Variance $ */}
+                            <td className={`px-4 py-3 text-sm text-right font-medium ${
+                              variance > 0 ? 'text-red-600' : variance < 0 ? 'text-green-600' : 'text-text-secondary'
+                            }`}>
+                              {area.budgeted_amount ? (
+                                <>
+                                  {variance > 0 ? '+' : ''}{formatCurrency(variance)}
+                                </>
+                              ) : '—'}
+                            </td>
+                            {/* Variance % */}
+                            <td className={`px-4 py-3 text-sm text-right ${
+                              variancePercent > 0 ? 'text-red-600' : variancePercent < 0 ? 'text-green-600' : 'text-text-secondary'
+                            }`}>
+                              {area.budgeted_amount ? (
+                                <>
+                                  {variancePercent > 0 ? '+' : ''}{variancePercent.toFixed(1)}%
+                                </>
+                              ) : '—'}
+                            </td>
+                            {/* Actions */}
+                            <td className="px-2 py-3 text-sm">
+                              <div className="flex items-center justify-center gap-1">
+                                {/* Move up */}
+                                <button
+                                  onClick={() => handleMoveArea(area.id, 'up')}
+                                  disabled={index === 0}
+                                  className="p-1 text-text-secondary hover:text-primary-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                                  title="Move up"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                  </svg>
+                                </button>
+                                {/* Move down */}
+                                <button
+                                  onClick={() => handleMoveArea(area.id, 'down')}
+                                  disabled={index === budgetAreas.length - 1}
+                                  className="p-1 text-text-secondary hover:text-primary-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                                  title="Move down"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                </button>
+                                {/* Delete */}
+                                <button
+                                  onClick={() => setDeleteConfirmId(area.id)}
+                                  className="p-1 text-text-secondary hover:text-red-600"
+                                  title="Delete area"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-8 text-center text-text-secondary text-sm">
+                          No budget areas yet. Add one below.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                  {/* Totals row */}
+                  {budgetAreas && budgetAreas.length > 0 && (
+                    <tfoot className="bg-gray-50 border-t border-border">
+                      <tr>
+                        <td className="px-4 py-3 text-sm font-semibold text-text-primary">Total</td>
+                        <td className="px-4 py-3 text-sm text-right font-semibold">{formatCurrency(budgetTotals.budgeted)}</td>
+                        <td className="px-4 py-3 text-sm text-right font-semibold">{formatCurrency(budgetTotals.actual)}</td>
+                        <td className={`px-4 py-3 text-sm text-right font-semibold ${
+                          totalVariance > 0 ? 'text-red-600' : totalVariance < 0 ? 'text-green-600' : 'text-text-secondary'
+                        }`}>
+                          {totalVariance > 0 ? '+' : ''}{formatCurrency(totalVariance)}
+                        </td>
+                        <td className={`px-4 py-3 text-sm text-right font-semibold ${
+                          totalVariance > 0 ? 'text-red-600' : totalVariance < 0 ? 'text-green-600' : 'text-text-secondary'
+                        }`}>
+                          {budgetTotals.budgeted ? (
+                            <>
+                              {totalVariance > 0 ? '+' : ''}{((totalVariance / budgetTotals.budgeted) * 100).toFixed(1)}%
+                            </>
+                          ) : '—'}
+                        </td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
                   )}
-                </tbody>
-                {/* Totals row */}
-                {budgetAreas && budgetAreas.length > 0 && (
-                  <tfoot className="bg-gray-50 border-t border-border">
-                    <tr>
-                      <td className="px-4 py-3 text-sm font-semibold text-text-primary">Total</td>
-                      <td className="px-4 py-3 text-sm text-right font-semibold">{formatCurrency(budgetTotals.budgeted)}</td>
-                      <td className="px-4 py-3 text-sm text-right font-semibold">{formatCurrency(budgetTotals.actual)}</td>
-                      <td className={`px-4 py-3 text-sm text-right font-semibold ${
-                        totalVariance > 0 ? 'text-red-600' : totalVariance < 0 ? 'text-green-600' : 'text-text-secondary'
-                      }`}>
-                        {totalVariance > 0 ? '+' : ''}{formatCurrency(totalVariance)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                )}
-              </table>
+                </table>
+              </div>
 
               {/* Add new area */}
               <div className="px-4 py-3 border-t border-border flex gap-2">
@@ -447,13 +582,24 @@ export function ProjectDetail() {
                 />
                 <button
                   onClick={handleAddBudgetArea}
-                  disabled={!newAreaName.trim()}
+                  disabled={!newAreaName.trim() || createBudgetArea.isPending}
                   className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors"
                 >
-                  Add
+                  {createBudgetArea.isPending ? 'Adding...' : 'Add'}
                 </button>
               </div>
             </div>
+          )}
+
+          {/* Delete confirmation dialog */}
+          {deleteConfirmId && (
+            <DeleteConfirmDialog
+              title="Delete Budget Area"
+              message={`Are you sure you want to delete "${budgetAreas?.find((a) => a.id === deleteConfirmId)?.area_name}"? This cannot be undone.`}
+              onConfirm={() => handleDeleteArea(deleteConfirmId)}
+              onCancel={() => setDeleteConfirmId(null)}
+              isDeleting={deleteBudgetArea.isPending}
+            />
           )}
         </Tabs.Content>
 

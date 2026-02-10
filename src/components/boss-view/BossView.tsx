@@ -3,6 +3,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useActiveProjects } from '../../hooks/useProjects';
 import { useWarRoom } from '../../hooks/useWarRoom';
 import { useQuotes } from '../../hooks/useQuotes';
+import { useDecisionsNeeded } from '../../hooks/useDecisionsNeeded';
+import { useRecentActivityByProject } from '../../hooks/useRecentActivity';
 import { ProjectHealthCard } from './ProjectHealthCard';
 import { ExportButton } from './ExportButton';
 import { SkeletonList } from '../shared/SkeletonCard';
@@ -13,6 +15,8 @@ export function BossView() {
   const { data: projects, isLoading: projectsLoading } = useActiveProjects();
   const { data: tasks, isLoading: tasksLoading } = useWarRoom();
   const { data: quotes, isLoading: quotesLoading } = useQuotes();
+  const { data: decisionsNeeded } = useDecisionsNeeded();
+  const { data: activityByProject } = useRecentActivityByProject(5);
   const [expandedProject, setExpandedProject] = useState<string | null>(null);
 
   // Invalidate queries on mount to ensure fresh data for executive view
@@ -20,6 +24,8 @@ export function BossView() {
     queryClient.invalidateQueries({ queryKey: ['projects'] });
     queryClient.invalidateQueries({ queryKey: ['war-room'] });
     queryClient.invalidateQueries({ queryKey: ['quotes'] });
+    queryClient.invalidateQueries({ queryKey: ['decisions-needed'] });
+    queryClient.invalidateQueries({ queryKey: ['recent-activity-by-project'] });
   }, [queryClient]);
 
   const isLoading = projectsLoading || tasksLoading || quotesLoading;
@@ -111,6 +117,39 @@ export function BossView() {
         )}
       </div>
 
+      {/* Decisions Needed Summary */}
+      {decisionsNeeded && decisionsNeeded.length > 0 && (
+        <div className="bg-amber-50 rounded-lg border border-amber-200 p-4 mb-6">
+          <h2 className="font-medium text-amber-800 mb-3 flex items-center gap-2">
+            <span>⚠️</span>
+            Decisions Needed ({decisionsNeeded.length})
+          </h2>
+          <div className="space-y-2">
+            {decisionsNeeded.slice(0, 5).map((decision) => (
+              <div
+                key={decision.id}
+                className="flex items-center justify-between text-sm bg-white rounded p-2 border border-amber-100"
+              >
+                <div>
+                  <span className="text-text-primary">{decision.description}</span>
+                  <span className="text-text-secondary ml-2">• {decision.projectName}</span>
+                </div>
+                {decision.amount && (
+                  <span className="font-medium text-amber-700">
+                    {formatCurrency(decision.amount)}
+                  </span>
+                )}
+              </div>
+            ))}
+            {decisionsNeeded.length > 5 && (
+              <p className="text-xs text-amber-600 text-center">
+                +{decisionsNeeded.length - 5} more decisions needed
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Project Health Cards */}
       <div className="space-y-4">
         <h2 className="font-medium text-text-primary">Project Health</h2>
@@ -127,6 +166,8 @@ export function BossView() {
               project={project}
               tasks={projectTasks}
               quotes={projectQuotes}
+              recentActivity={activityByProject?.[project.id] || []}
+              decisionsNeeded={decisionsNeeded || []}
               expanded={expandedProject === project.id}
               onToggle={() => setExpandedProject(
                 expandedProject === project.id ? null : project.id

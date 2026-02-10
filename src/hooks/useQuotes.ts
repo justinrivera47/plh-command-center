@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import { useChangeLog } from './useChangeLog';
 import type { Quote, QuoteComparison } from '../lib/types';
 
 export function useQuotes(projectId?: string) {
@@ -43,6 +44,7 @@ export function useQuote(id: string | undefined) {
 
 export function useCreateQuote() {
   const queryClient = useQueryClient();
+  const { logCreation } = useChangeLog();
 
   return useMutation({
     mutationFn: async (quote: Omit<Quote, 'id' | 'created_at' | 'updated_at'>) => {
@@ -53,10 +55,26 @@ export function useCreateQuote() {
         .single();
 
       if (error) throw error;
+
+      // Log creation
+      await logCreation({
+        recordType: 'quote',
+        recordId: data.id,
+        userId: quote.user_id,
+        data: {
+          project_id: quote.project_id,
+          vendor_id: quote.vendor_id,
+          quoted_price: quote.quoted_price,
+          status: quote.status,
+        },
+        note: `New quote logged: $${quote.quoted_price || 0}`,
+      });
+
       return data as Quote;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['quotes'] });
+      queryClient.invalidateQueries({ queryKey: ['project-activity'] });
     },
   });
 }
@@ -145,6 +163,7 @@ export function useUpdateQuoteWithLog() {
       queryClient.invalidateQueries({ queryKey: ['quotes'] });
       queryClient.invalidateQueries({ queryKey: ['quotes', data.id] });
       queryClient.invalidateQueries({ queryKey: ['quote-history'] });
+      queryClient.invalidateQueries({ queryKey: ['project-activity'] });
     },
   });
 }

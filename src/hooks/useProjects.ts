@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import { useChangeLog } from './useChangeLog';
+import { detectChanges } from '../lib/changeUtils';
 import type { Project, ProjectBudgetArea, ChangeLog } from '../lib/types';
 
 export function useProjects() {
@@ -54,9 +56,10 @@ export function useProject(id: string | undefined) {
 
 export function useCreateProject() {
   const queryClient = useQueryClient();
+  const { logCreation } = useChangeLog();
 
   return useMutation({
-    mutationFn: async (project: Omit<Project, 'id' | 'created_at' | 'updated_at'>) => {
+    mutationFn: async ({ userId, ...project }: Omit<Project, 'id' | 'created_at' | 'updated_at'> & { userId: string }) => {
       const { data, error } = await supabase
         .from('projects')
         .insert(project)
@@ -64,6 +67,20 @@ export function useCreateProject() {
         .single();
 
       if (error) throw error;
+
+      // Log creation
+      await logCreation({
+        recordType: 'project',
+        recordId: data.id,
+        userId,
+        data: {
+          name: project.name,
+          client_name: project.client_name,
+          total_budget: project.total_budget,
+        },
+        note: `Created project: ${project.name}`,
+      });
+
       return data as Project;
     },
     onSuccess: () => {
@@ -74,9 +91,21 @@ export function useCreateProject() {
 
 export function useUpdateProject() {
   const queryClient = useQueryClient();
+  const { logChange } = useChangeLog();
 
   return useMutation({
-    mutationFn: async ({ id, ...updates }: Partial<Project> & { id: string }) => {
+    mutationFn: async ({ id, userId, ...updates }: Partial<Project> & { id: string; userId?: string }) => {
+      // Fetch current for comparison if userId provided (for logging)
+      let current: Project | null = null;
+      if (userId) {
+        const { data: currentData } = await supabase
+          .from('projects')
+          .select('*')
+          .eq('id', id)
+          .single();
+        current = currentData;
+      }
+
       const { data, error } = await supabase
         .from('projects')
         .update(updates)
@@ -85,11 +114,26 @@ export function useUpdateProject() {
         .single();
 
       if (error) throw error;
+
+      // Log changes if userId provided
+      if (userId && current) {
+        const changes = detectChanges(current, updates, ['name', 'status', 'total_budget', 'client_name', 'address']);
+        if (changes.length > 0) {
+          await logChange({
+            recordType: 'project',
+            recordId: id,
+            userId,
+            changes,
+          });
+        }
+      }
+
       return data as Project;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['projects', data.id] });
+      queryClient.invalidateQueries({ queryKey: ['project-activity', data.id] });
     },
   });
 }
@@ -116,9 +160,10 @@ export function useProjectBudgetAreas(projectId: string | undefined) {
 
 export function useCreateBudgetArea() {
   const queryClient = useQueryClient();
+  const { logCreation } = useChangeLog();
 
   return useMutation({
-    mutationFn: async (area: Omit<ProjectBudgetArea, 'id'>) => {
+    mutationFn: async ({ userId, ...area }: Omit<ProjectBudgetArea, 'id'> & { userId: string }) => {
       const { data, error } = await supabase
         .from('project_budget_areas')
         .insert(area)
@@ -126,19 +171,46 @@ export function useCreateBudgetArea() {
         .single();
 
       if (error) throw error;
+
+      // Log creation
+      await logCreation({
+        recordType: 'budget_area',
+        recordId: data.id,
+        userId,
+        data: {
+          area_name: area.area_name,
+          budgeted_amount: area.budgeted_amount,
+          actual_amount: area.actual_amount,
+        },
+        note: `Added budget area: ${area.area_name}`,
+      });
+
       return data as ProjectBudgetArea;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['budget-areas', data.project_id] });
+      queryClient.invalidateQueries({ queryKey: ['project-activity', data.project_id] });
     },
   });
 }
 
 export function useUpdateBudgetArea() {
   const queryClient = useQueryClient();
+  const { logChange } = useChangeLog();
 
   return useMutation({
-    mutationFn: async ({ id, project_id, ...updates }: Partial<ProjectBudgetArea> & { id: string; project_id: string }) => {
+    mutationFn: async ({ id, project_id, userId, ...updates }: Partial<ProjectBudgetArea> & { id: string; project_id: string; userId?: string }) => {
+      // Fetch current for comparison if userId provided
+      let current: ProjectBudgetArea | null = null;
+      if (userId) {
+        const { data: currentData } = await supabase
+          .from('project_budget_areas')
+          .select('*')
+          .eq('id', id)
+          .single();
+        current = currentData;
+      }
+
       const { data, error } = await supabase
         .from('project_budget_areas')
         .update(updates)
@@ -147,7 +219,96 @@ export function useUpdateBudgetArea() {
         .single();
 
       if (error) throw error;
+
+      // Log changes if userId provided
+      if (userId && current) {
+        const changes = detectChanges(current, updates, ['area_name', 'budgeted_amount', 'actual_amount']);
+        if (changes.length > 0) {
+          await logChange({
+            recordType: 'budget_area',
+            recordId: id,
+            userId,
+            changes,
+            note: `Updated budget area: ${current.area_name}`,
+          });
+        }
+      }
+
       return { ...data, project_id } as ProjectBudgetArea;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['budget-areas', data.project_id] });
+      queryClient.invalidateQueries({ queryKey: ['project-activity', data.project_id] });
+    },
+  });
+}
+
+export function useDeleteBudgetArea() {
+  const queryClient = useQueryClient();
+  const { logDeletion } = useChangeLog();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      project_id,
+      userId,
+      areaData,
+    }: {
+      id: string;
+      project_id: string;
+      userId: string;
+      areaData: ProjectBudgetArea;
+    }) => {
+      const { error } = await supabase
+        .from('project_budget_areas')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      // Log deletion
+      await logDeletion({
+        recordType: 'budget_area',
+        recordId: id,
+        userId,
+        data: {
+          area_name: areaData.area_name,
+          budgeted_amount: areaData.budgeted_amount,
+          actual_amount: areaData.actual_amount,
+        },
+        note: `Deleted budget area: ${areaData.area_name}`,
+      });
+
+      return { id, project_id };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['budget-areas', data.project_id] });
+      queryClient.invalidateQueries({ queryKey: ['project-activity', data.project_id] });
+    },
+  });
+}
+
+export function useReorderBudgetAreas() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      project_id,
+      orderedIds,
+    }: {
+      project_id: string;
+      orderedIds: string[];
+    }) => {
+      // Update sort_order for each area
+      const updates = orderedIds.map((id, index) =>
+        supabase
+          .from('project_budget_areas')
+          .update({ sort_order: index + 1 })
+          .eq('id', id)
+      );
+
+      await Promise.all(updates);
+      return { project_id };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['budget-areas', data.project_id] });

@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import { useChangeLog } from './useChangeLog';
+import { detectChanges } from '../lib/changeUtils';
 import type { RFI } from '../lib/types';
 
 export function useRFIs(projectId?: string) {
@@ -65,6 +67,7 @@ export function useRFI(id: string | undefined) {
 
 export function useCreateRFI() {
   const queryClient = useQueryClient();
+  const { logCreation } = useChangeLog();
 
   return useMutation({
     mutationFn: async (rfi: Omit<RFI, 'id' | 'created_at' | 'updated_at'>) => {
@@ -75,20 +78,49 @@ export function useCreateRFI() {
         .single();
 
       if (error) throw error;
+
+      // Log creation
+      await logCreation({
+        recordType: 'rfi',
+        recordId: data.id,
+        userId: rfi.user_id,
+        data: {
+          task: rfi.task,
+          project_id: rfi.project_id,
+          priority: rfi.priority,
+          is_blocking: rfi.is_blocking,
+          status: rfi.status,
+        },
+        note: `Created task: ${rfi.task}`,
+      });
+
       return data as RFI;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rfis'] });
       queryClient.invalidateQueries({ queryKey: ['war-room'] });
+      queryClient.invalidateQueries({ queryKey: ['project-activity'] });
     },
   });
 }
 
 export function useUpdateRFI() {
   const queryClient = useQueryClient();
+  const { logChange } = useChangeLog();
 
   return useMutation({
-    mutationFn: async ({ id, ...updates }: Partial<RFI> & { id: string }) => {
+    mutationFn: async ({ id, userId, ...updates }: Partial<RFI> & { id: string; userId?: string }) => {
+      // Fetch current for comparison if userId provided (for logging)
+      let current: RFI | null = null;
+      if (userId) {
+        const { data: currentData } = await supabase
+          .from('rfis')
+          .select('*')
+          .eq('id', id)
+          .single();
+        current = currentData;
+      }
+
       const { data, error } = await supabase
         .from('rfis')
         .update(updates)
@@ -97,12 +129,30 @@ export function useUpdateRFI() {
         .single();
 
       if (error) throw error;
+
+      // Log changes if userId provided (exclude status as it has its own logging)
+      if (userId && current) {
+        const changes = detectChanges(current, updates, [
+          'task', 'scope', 'priority', 'is_blocking', 'blocks_description',
+          'poc_name', 'poc_type', 'next_action_date', 'latest_update'
+        ]);
+        if (changes.length > 0) {
+          await logChange({
+            recordType: 'rfi',
+            recordId: id,
+            userId,
+            changes,
+          });
+        }
+      }
+
       return data as RFI;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['rfis'] });
       queryClient.invalidateQueries({ queryKey: ['rfis', data.id] });
       queryClient.invalidateQueries({ queryKey: ['war-room'] });
+      queryClient.invalidateQueries({ queryKey: ['project-activity'] });
     },
   });
 }
@@ -171,6 +221,7 @@ export function useUpdateRFIStatus() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rfis'] });
       queryClient.invalidateQueries({ queryKey: ['war-room'] });
+      queryClient.invalidateQueries({ queryKey: ['project-activity'] });
     },
   });
 }
