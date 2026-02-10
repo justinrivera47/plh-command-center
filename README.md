@@ -183,15 +183,15 @@ plh-command-center/
 - [x] Vendor database with search and filters
 - [ ] Vendor profile pages (Phase 8)
 
-### Phase 5: Data Entry + Audit Trail
-- [ ] Quick Entry FAB and modal
-- [ ] Log Quote form
-- [ ] Status Update form
-- [ ] New RFI form
-- [ ] Call Log form
-- [ ] New Vendor form
-- [ ] Inline editing component
-- [ ] Change log recording
+### Phase 5: Data Entry + Audit Trail ✅
+- [x] Quick Entry FAB and modal
+- [x] Log Quote form
+- [x] Status Update form
+- [x] New RFI form
+- [x] Call Log form
+- [x] New Vendor form
+- [x] Activity log recording for status changes
+- [ ] Inline editing component (Phase 8)
 
 ### Phase 6: Communication + Stall Detection
 - [ ] Message templates
