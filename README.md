@@ -199,11 +199,11 @@ plh-command-center/
 - [x] Stall detection logic
 - [x] Auto-prompts for stalled tasks (StallPrompt, StallIndicator)
 
-### Phase 7: Boss View + Export
-- [ ] Boss view dashboard
-- [ ] Project health indicators
-- [ ] Budget progress bars
-- [ ] Excel export with SheetJS
+### Phase 7: Boss View + Export ✅
+- [x] Boss view dashboard
+- [x] Project health indicators (good/warning/critical)
+- [x] Budget progress bars with variance tracking
+- [x] Excel export with SheetJS (multi-sheet reports)
 
 ### Phase 8: Settings + Polish
 - [ ] Settings page
