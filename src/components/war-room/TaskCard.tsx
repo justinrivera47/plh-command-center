@@ -4,6 +4,7 @@ import { PriorityBadge } from '../shared/PriorityBadge';
 import { BlockingBadge } from '../shared/BlockingBadge';
 import { BlockedByBanner } from '../shared/BlockedByBanner';
 import { DaysCounter } from '../shared/DaysCounter';
+import { StallIndicator } from '../shared/StallPrompt';
 import { useUIStore } from '../../stores/uiStore';
 
 interface TaskCardProps {
@@ -76,6 +77,11 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
           Latest: {task.latest_update}
         </p>
       )}
+
+      {/* Stall indicator for tasks needing attention */}
+      <div className="mb-2">
+        <StallIndicator task={task} />
+      </div>
 
       {/* Footer: Status, POC, Days, Action */}
       <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">

@@ -4,6 +4,7 @@ import { Header } from './Header';
 import { Sidebar } from './Sidebar';
 import { QuickEntryFAB } from '../quick-entry/QuickEntryFAB';
 import { QuickEntryModal } from '../quick-entry/QuickEntryModal';
+import { MessageComposer } from '../messages/MessageComposer';
 import { OfflineBanner } from '../shared/OfflineBanner';
 
 export function AppShell() {
@@ -37,6 +38,9 @@ export function AppShell() {
 
       {/* Quick Entry Modal */}
       <QuickEntryModal />
+
+      {/* Message Composer Modal */}
+      <MessageComposer />
     </div>
   );
 }
