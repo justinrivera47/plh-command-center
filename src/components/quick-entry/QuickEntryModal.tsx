@@ -1,6 +1,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as Dialog from '@radix-ui/react-dialog';
+import { toast } from 'sonner';
 import { useUIStore } from '../../stores/uiStore';
 import { useActiveProjects, useCreateProject } from '../../hooks/useProjects';
 import { useOpenRFIs, useCreateRFI, useUpdateRFIStatus } from '../../hooks/useRFIs';
@@ -153,6 +154,7 @@ function LogQuoteForm() {
       availability: null,
     });
 
+    toast.success('Quote logged successfully');
     closeQuickEntry();
   };
 
@@ -301,6 +303,7 @@ function StatusUpdateForm() {
       next_action_date: data.next_action_date,
     });
 
+    toast.success('Status updated');
     closeQuickEntry();
   };
 
@@ -466,6 +469,7 @@ function NewRFIForm() {
       notes: null,
     });
 
+    toast.success('Task created');
     closeQuickEntry();
   };
 
@@ -668,6 +672,7 @@ function CallLogForm() {
       });
     }
 
+    toast.success('Call logged');
     closeQuickEntry();
   };
 
@@ -853,6 +858,7 @@ function NewVendorForm() {
       tradeIds: data.trade_ids,
     });
 
+    toast.success('Vendor added');
     closeQuickEntry();
   };
 
@@ -992,6 +998,7 @@ function NewProjectForm() {
       notes: null,
     });
 
+    toast.success('Project created');
     closeQuickEntry();
   };
 

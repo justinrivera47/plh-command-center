@@ -41,6 +41,12 @@ interface UIState {
   openImportModal: () => void;
   closeImportModal: () => void;
 
+  // Command palette
+  commandPaletteOpen: boolean;
+  openCommandPalette: () => void;
+  closeCommandPalette: () => void;
+  toggleCommandPalette: () => void;
+
   // Offline status
   isOnline: boolean;
   setIsOnline: (online: boolean) => void;
@@ -90,6 +96,12 @@ export const useUIStore = create<UIState>((set) => ({
   importModalOpen: false,
   openImportModal: () => set({ importModalOpen: true }),
   closeImportModal: () => set({ importModalOpen: false }),
+
+  // Command palette
+  commandPaletteOpen: false,
+  openCommandPalette: () => set({ commandPaletteOpen: true }),
+  closeCommandPalette: () => set({ commandPaletteOpen: false }),
+  toggleCommandPalette: () => set((state) => ({ commandPaletteOpen: !state.commandPaletteOpen })),
 
   // Offline status
   isOnline: navigator.onLine,

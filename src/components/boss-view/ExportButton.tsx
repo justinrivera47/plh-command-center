@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import * as XLSX from 'xlsx-js-style';
+import { toast } from 'sonner';
 import { useExportData, type ExportData } from '../../hooks/useExportData';
 
 // ============================================
@@ -81,14 +82,15 @@ export function ExportButton() {
       // Refetch to get latest data
       const { data } = await refetch();
       if (!data) {
-        alert('Failed to load export data');
+        toast.error('Failed to load export data');
         return;
       }
 
       generateExcel(data);
+      toast.success('Report exported successfully');
     } catch (error) {
       console.error('Export failed:', error);
-      alert('Export failed. Please try again.');
+      toast.error('Export failed. Please try again.');
     } finally {
       setIsExporting(false);
     }

@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
+import { toast } from 'sonner';
 import { useCSVImport, type ImportResult, type ValidationError } from '../../hooks/useCSVImport';
 import {
   type ImportType,
@@ -68,7 +69,7 @@ export function ImportModal({ open, onClose }: ImportModalProps) {
 
       setStep('map_columns');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to parse file');
+      toast.error(err instanceof Error ? err.message : 'Failed to parse file');
     }
   };
 
@@ -95,7 +96,7 @@ export function ImportModal({ open, onClose }: ImportModalProps) {
     const missingRequired = fields.filter(f => f.required && !columnMapping[f.key]);
 
     if (missingRequired.length > 0) {
-      alert(`Please map required fields: ${missingRequired.map(f => f.label).join(', ')}`);
+      toast.error(`Please map required fields: ${missingRequired.map(f => f.label).join(', ')}`);
       return;
     }
 
@@ -117,8 +118,9 @@ export function ImportModal({ open, onClose }: ImportModalProps) {
       const result = await importData(validatedData, importType);
       setImportResult(result);
       setStep('summary');
+      toast.success(`Imported ${result.success} rows successfully`);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Import failed');
+      toast.error(err instanceof Error ? err.message : 'Import failed');
       setStep('preview');
     }
   };

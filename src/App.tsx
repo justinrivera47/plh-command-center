@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect } from 'react';
+import { Toaster } from 'sonner';
+import { CommandPalette } from './components/command-palette';
 
 import { useUIStore } from './stores/uiStore';
 import { useAuth } from './hooks/useAuth';
@@ -99,7 +101,14 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <OnlineStatusProvider>
+        <Toaster
+          position="top-right"
+          richColors
+          closeButton
+          duration={4000}
+        />
         <BrowserRouter>
+          <CommandPalette />
           <Routes>
             {/* Public routes */}
             <Route path="/login" element={<LoginPage />} />
