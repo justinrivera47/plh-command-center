@@ -166,13 +166,15 @@ plh-command-center/
 - [x] Completion step with stats
 - [ ] CSV Import flow (full column mapping - Phase 8)
 
-### Phase 3: Core App Shell
-- [ ] App layout (mobile tab bar, desktop sidebar)
-- [ ] War Room view with stats and filters
-- [ ] Task cards with status badges
-- [ ] Stall prompts
-- [ ] TanStack Query setup
-- [ ] Zustand store
+### Phase 3: Core App Shell ✅
+- [x] App layout (mobile tab bar, desktop sidebar)
+- [x] War Room view with stats and filters
+- [x] Task cards with status badges
+- [x] Shared components (StatusBadge, PriorityBadge, etc.)
+- [x] TanStack Query setup
+- [x] Zustand store
+- [x] Quick Entry FAB and modal (forms in Phase 5)
+- [ ] Stall prompts (Phase 6)
 
 ### Phase 4: Projects + Quotes + Vendors
 - [ ] Project list with expandable cards
