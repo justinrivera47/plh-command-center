@@ -19,15 +19,25 @@ export function MessageComposer() {
   const { data: rfi } = useRFI(messageComposerContext?.rfiId);
   const { data: project } = useProject(rfi?.project_id);
 
-  // Reset state when modal opens
+  // Reset state and auto-select template when modal opens
   useEffect(() => {
     if (messageComposerOpen) {
-      setSelectedTemplate(null);
       setSubject('');
       setBody('');
       setCopied(false);
+
+      // Auto-select template based on context if available
+      if (messageComposerContext?.templateCategory && groupedTemplates) {
+        const categoryTemplates = groupedTemplates[messageComposerContext.templateCategory];
+        if (categoryTemplates && categoryTemplates.length > 0) {
+          // Select the first template in the matching category
+          setSelectedTemplate(categoryTemplates[0]);
+          return;
+        }
+      }
+      setSelectedTemplate(null);
     }
-  }, [messageComposerOpen]);
+  }, [messageComposerOpen, messageComposerContext?.templateCategory, groupedTemplates]);
 
   // Interpolate template when selected
   useEffect(() => {
