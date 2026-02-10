@@ -2,7 +2,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useUIStore } from '../../stores/uiStore';
-import { useActiveProjects } from '../../hooks/useProjects';
+import { useActiveProjects, useCreateProject } from '../../hooks/useProjects';
 import { useOpenRFIs, useCreateRFI, useUpdateRFIStatus } from '../../hooks/useRFIs';
 import { useCreateQuote } from '../../hooks/useQuotes';
 import { useVendors, useTradeCategories, useCreateVendor } from '../../hooks/useVendors';
@@ -13,11 +13,13 @@ import {
   newRFISchema,
   callLogSchema,
   newVendorSchema,
+  newProjectSchema,
   type LogQuoteFormData,
   type StatusUpdateFormData,
   type NewRFIFormData,
   type CallLogFormData,
   type NewVendorFormData,
+  type NewProjectFormData,
 } from '../../lib/schemas';
 import { RFI_STATUS_CONFIG, PRIORITY_CONFIG, POC_TYPE_CONFIG } from '../../lib/constants';
 import type { RFIStatus, Priority, POCType } from '../../lib/types';
@@ -28,6 +30,7 @@ const ENTRY_TYPES = [
   { type: 'rfi', icon: '📋', label: 'New task / RFI' },
   { type: 'call', icon: '📞', label: 'Just had a call' },
   { type: 'vendor', icon: '📇', label: 'New vendor' },
+  { type: 'project', icon: '📁', label: 'New project' },
 ] as const;
 
 export function QuickEntryModal() {
@@ -76,6 +79,7 @@ export function QuickEntryModal() {
             {quickEntryType === 'quote' && <LogQuoteForm />}
             {quickEntryType === 'call' && <CallLogForm />}
             {quickEntryType === 'vendor' && <NewVendorForm />}
+            {quickEntryType === 'project' && <NewProjectForm />}
 
             {/* Back button when form is shown */}
             {quickEntryType && (
@@ -950,6 +954,150 @@ function NewVendorForm() {
         className="w-full py-3 px-4 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
         {isSubmitting ? 'Adding...' : 'Add Vendor'}
+      </button>
+    </form>
+  );
+}
+
+// ============================================
+// New Project Form
+// ============================================
+
+function NewProjectForm() {
+  const { user } = useAuth();
+  const createProject = useCreateProject();
+  const closeQuickEntry = useUIStore((state) => state.closeQuickEntry);
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<NewProjectFormData>({
+    resolver: zodResolver(newProjectSchema),
+  });
+
+  const onSubmit = async (data: NewProjectFormData) => {
+    if (!user) return;
+
+    await createProject.mutateAsync({
+      userId: user.id,
+      user_id: user.id,
+      name: data.name,
+      client_name: data.client_name,
+      address: data.address || null,
+      client_email: data.client_email || null,
+      client_phone: data.client_phone || null,
+      total_budget: data.total_budget || null,
+      status: 'active',
+      notes: null,
+    });
+
+    closeQuickEntry();
+  };
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      {/* Project Name */}
+      <div>
+        <label className="block text-sm font-medium text-text-secondary mb-1">
+          Project Name *
+        </label>
+        <input
+          type="text"
+          {...register('name')}
+          placeholder="e.g., 123 Main St Renovation"
+          className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+        />
+        {errors.name && (
+          <p className="text-xs text-red-600 mt-1">{errors.name.message}</p>
+        )}
+      </div>
+
+      {/* Client Name */}
+      <div>
+        <label className="block text-sm font-medium text-text-secondary mb-1">
+          Client Name *
+        </label>
+        <input
+          type="text"
+          {...register('client_name')}
+          placeholder="Who's the client?"
+          className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+        />
+        {errors.client_name && (
+          <p className="text-xs text-red-600 mt-1">{errors.client_name.message}</p>
+        )}
+      </div>
+
+      {/* Address */}
+      <div>
+        <label className="block text-sm font-medium text-text-secondary mb-1">
+          Project Address
+        </label>
+        <input
+          type="text"
+          {...register('address')}
+          placeholder="123 Main St, City, State"
+          className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+        />
+      </div>
+
+      {/* Client Email */}
+      <div>
+        <label className="block text-sm font-medium text-text-secondary mb-1">
+          Client Email
+        </label>
+        <input
+          type="email"
+          {...register('client_email')}
+          placeholder="client@email.com"
+          className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+        />
+        {errors.client_email && (
+          <p className="text-xs text-red-600 mt-1">{errors.client_email.message}</p>
+        )}
+      </div>
+
+      {/* Client Phone */}
+      <div>
+        <label className="block text-sm font-medium text-text-secondary mb-1">
+          Client Phone
+        </label>
+        <input
+          type="tel"
+          {...register('client_phone')}
+          placeholder="(555) 123-4567"
+          className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+        />
+      </div>
+
+      {/* Total Budget */}
+      <div>
+        <label className="block text-sm font-medium text-text-secondary mb-1">
+          Total Budget
+        </label>
+        <div className="relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary">$</span>
+          <input
+            type="number"
+            step="1000"
+            {...register('total_budget', { valueAsNumber: true })}
+            placeholder="150000"
+            className="w-full pl-7 pr-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          />
+        </div>
+        {errors.total_budget && (
+          <p className="text-xs text-red-600 mt-1">{errors.total_budget.message}</p>
+        )}
+      </div>
+
+      {/* Submit */}
+      <button
+        type="submit"
+        disabled={isSubmitting}
+        className="w-full py-3 px-4 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      >
+        {isSubmitting ? 'Creating...' : 'Create Project'}
       </button>
     </form>
   );

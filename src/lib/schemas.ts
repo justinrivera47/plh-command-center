@@ -109,6 +109,17 @@ export const newVendorSchema = z.object({
 
 export type NewVendorFormData = z.infer<typeof newVendorSchema>;
 
+export const newProjectSchema = z.object({
+  name: z.string().min(1, 'Project name is required'),
+  client_name: z.string().min(1, 'Client name is required'),
+  address: z.string().optional(),
+  client_email: z.string().email('Invalid email').optional().or(z.literal('')),
+  client_phone: z.string().optional(),
+  total_budget: z.number().positive('Budget must be positive').optional().nullable(),
+});
+
+export type NewProjectFormData = z.infer<typeof newProjectSchema>;
+
 // ============================================
 // Settings Schemas
 // ============================================

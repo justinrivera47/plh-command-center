@@ -11,7 +11,7 @@ interface UIState {
 
   // Quick Entry modal
   quickEntryOpen: boolean;
-  quickEntryType: 'quote' | 'status' | 'rfi' | 'call' | 'vendor' | null;
+  quickEntryType: 'quote' | 'status' | 'rfi' | 'call' | 'vendor' | 'project' | null;
   openQuickEntry: (type: UIState['quickEntryType']) => void;
   closeQuickEntry: () => void;
 
@@ -35,6 +35,11 @@ interface UIState {
   } | null;
   openMessageComposer: (context: UIState['messageComposerContext']) => void;
   closeMessageComposer: () => void;
+
+  // Import modal
+  importModalOpen: boolean;
+  openImportModal: () => void;
+  closeImportModal: () => void;
 
   // Offline status
   isOnline: boolean;
@@ -80,6 +85,11 @@ export const useUIStore = create<UIState>((set) => ({
     set({ messageComposerOpen: true, messageComposerContext: context }),
   closeMessageComposer: () =>
     set({ messageComposerOpen: false, messageComposerContext: null }),
+
+  // Import modal
+  importModalOpen: false,
+  openImportModal: () => set({ importModalOpen: true }),
+  closeImportModal: () => set({ importModalOpen: false }),
 
   // Offline status
   isOnline: navigator.onLine,

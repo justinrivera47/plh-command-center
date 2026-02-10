@@ -2,11 +2,14 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '../../hooks/useAuth';
+import { useUIStore } from '../../stores/uiStore';
 import { followUpSettingsSchema, type FollowUpSettingsFormData } from '../../lib/schemas';
 import { USER_ROLES } from '../../lib/constants';
+import { ImportModal } from '../import';
 
 export function SettingsPage() {
   const { user, profile, signOut, updateProfile } = useAuth();
+  const { importModalOpen, openImportModal, closeImportModal } = useUIStore();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -144,6 +147,27 @@ export function SettingsPage() {
         </form>
       </section>
 
+      {/* Data Management */}
+      <section className="bg-white rounded-lg border border-border p-4 mb-6">
+        <h2 className="font-medium text-text-primary mb-4">Data Management</h2>
+        <div className="space-y-3">
+          <button
+            onClick={openImportModal}
+            className="w-full py-3 px-4 border border-border rounded-lg hover:border-primary-300 hover:bg-primary-50 text-left transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">📄</span>
+              <div>
+                <span className="font-medium text-text-primary block">Import Data from CSV</span>
+                <span className="text-sm text-text-secondary">
+                  Import projects, tasks, budget items, or vendors
+                </span>
+              </div>
+            </div>
+          </button>
+        </div>
+      </section>
+
       {/* App Info */}
       <section className="bg-white rounded-lg border border-border p-4 mb-6">
         <h2 className="font-medium text-text-primary mb-4">About</h2>
@@ -162,6 +186,9 @@ export function SettingsPage() {
           Sign Out
         </button>
       </section>
+
+      {/* Import Modal */}
+      <ImportModal open={importModalOpen} onClose={closeImportModal} />
     </div>
   );
 }
