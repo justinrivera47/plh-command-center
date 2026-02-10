@@ -22,6 +22,7 @@ import { ProjectDetail } from './components/projects/ProjectDetail';
 import { QuoteTracker } from './components/quotes/QuoteTracker';
 import { VendorList } from './components/vendors/VendorList';
 import { BossView } from './components/boss-view/BossView';
+import { SettingsPage } from './components/settings/SettingsPage';
 
 // Configure TanStack Query
 const queryClient = new QueryClient({
@@ -130,6 +131,7 @@ function App() {
               <Route path="quotes" element={<QuoteTracker />} />
               <Route path="vendors" element={<VendorList />} />
               <Route path="boss-view" element={<BossView />} />
+              <Route path="settings" element={<SettingsPage />} />
             </Route>
 
             {/* Fallback */}

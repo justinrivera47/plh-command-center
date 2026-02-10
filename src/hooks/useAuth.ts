@@ -97,10 +97,31 @@ export function useAuth() {
     if (error) throw error;
   }
 
+  async function updateProfile(updates: Partial<UserProfile>) {
+    if (!state.user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .update(updates)
+      .eq('id', state.user.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    setState((prev) => ({
+      ...prev,
+      profile: data as UserProfile,
+    }));
+
+    return data as UserProfile;
+  }
+
   return {
     ...state,
     signUp,
     signIn,
     signOut,
+    updateProfile,
   };
 }
