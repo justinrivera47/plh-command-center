@@ -388,7 +388,35 @@ export function ProjectDetail() {
         <Link to="/projects" className="text-sm text-primary-600 hover:text-primary-700 mb-2 inline-block">
           &larr; Back to Projects
         </Link>
-        <h1 className="text-xl font-semibold text-text-primary">{project.name}</h1>
+        <div className="flex items-center gap-3 flex-wrap">
+          <h1 className="text-xl font-semibold text-text-primary">{project.name}</h1>
+          {/* Status dropdown */}
+          <select
+            value={project.status}
+            onChange={(e) => {
+              if (user) {
+                updateProject.mutate({
+                  id: project.id,
+                  userId: user.id,
+                  status: e.target.value as 'active' | 'on_hold' | 'completed' | 'archived',
+                });
+              }
+            }}
+            className={`text-sm font-medium px-3 py-1 rounded-full border-0 cursor-pointer ${
+              project.status === 'active'
+                ? 'bg-green-100 text-green-700'
+                : project.status === 'on_hold'
+                ? 'bg-amber-100 text-amber-700'
+                : project.status === 'completed'
+                ? 'bg-blue-100 text-blue-700'
+                : 'bg-gray-100 text-gray-700'
+            }`}
+          >
+            <option value="active">Active</option>
+            <option value="on_hold">On Hold</option>
+            <option value="completed">Completed</option>
+          </select>
+        </div>
         <div className="text-sm text-text-secondary mt-1">
           {project.client_name && <span>{project.client_name}</span>}
         </div>

@@ -408,6 +408,29 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
               </div>
             </div>
 
+            {/* Blocking toggle */}
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1">Blocking Status</label>
+              <button
+                onClick={() => updateRFI.mutate({ id: task.id, is_blocking: !task.is_blocking })}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  task.is_blocking
+                    ? 'bg-red-500 text-white hover:bg-red-600'
+                    : 'bg-white border border-border text-text-secondary hover:border-gray-300'
+                }`}
+              >
+                {task.is_blocking ? (
+                  <>
+                    <span>🚫</span> Blocking - Click to Unblock
+                  </>
+                ) : (
+                  <>
+                    <span>⚡</span> Not Blocking - Click to Mark as Blocking
+                  </>
+                )}
+              </button>
+            </div>
+
             {/* Follow-up date */}
             <div>
               <label className="block text-xs font-medium text-text-secondary mb-1">Follow-up Date</label>

@@ -38,7 +38,7 @@ export const firstFireSchema = z.object({
   blocking_type: z.enum(['waiting_on_someone', 'missing_info', 'havent_started', 'unclear_next_step']),
   // Conditional fields
   poc_name: z.string().optional(),
-  poc_type: z.enum(['client', 'vendor', 'contractor']).optional(),
+  poc_type: z.enum(['client', 'vendor', 'contractor', 'design_team']).optional(),
   missing_info: z.string().optional(),
 });
 
@@ -53,7 +53,7 @@ export const newRFISchema = z.object({
   task: z.string().min(1, 'Task name is required'),
   scope: z.string().optional(),
   poc_name: z.string().optional(),
-  poc_type: z.enum(['client', 'vendor', 'contractor', 'internal']).optional(),
+  poc_type: z.enum(['client', 'vendor', 'contractor', 'internal', 'design_team']).optional(),
   priority: z.enum(['P1', 'P2', 'P3']),
   is_blocking: z.boolean(),
   blocks_description: z.string().optional(),

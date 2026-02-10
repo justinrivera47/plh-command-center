@@ -95,7 +95,7 @@ const rfiStatusValues = [
 ] as const;
 
 const priorityValues = ['P1', 'P2', 'P3'] as const;
-const pocTypeValues = ['client', 'vendor', 'contractor', 'internal'] as const;
+const pocTypeValues = ['client', 'vendor', 'contractor', 'internal', 'design_team'] as const;
 
 export const importTaskSchema = z.object({
   project_name: z.string().min(1, 'Project name is required'),

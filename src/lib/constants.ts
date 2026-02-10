@@ -26,6 +26,7 @@ export const POC_TYPE_CONFIG: Record<POCType, { label: string; icon: string }> =
   vendor: { label: 'Vendor', icon: '📦' },
   contractor: { label: 'Contractor', icon: '🔨' },
   internal: { label: 'Internal', icon: '🏠' },
+  design_team: { label: 'Design Team', icon: '🎨' },
 };
 
 export const QUOTE_STATUS_CONFIG: Record<QuoteStatus, { label: string; color: string }> = {

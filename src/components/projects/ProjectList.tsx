@@ -61,13 +61,23 @@ export function ProjectList() {
 
       {/* Empty state */}
       {!isLoading && filteredProjects && filteredProjects.length === 0 && (
-        <EmptyState
-          icon="📁"
-          title="No projects yet"
-          description="Add your first project to get started tracking tasks and quotes."
-          actionLabel="Add Project"
-          onAction={() => openQuickEntry('rfi')}
-        />
+        statusFilter === 'all' || !projects || projects.length === 0 ? (
+          <EmptyState
+            icon="📁"
+            title="No projects yet"
+            description="Add your first project to get started tracking tasks and quotes."
+            actionLabel="Add Project"
+            onAction={() => openQuickEntry('project')}
+          />
+        ) : (
+          <EmptyState
+            icon="📁"
+            title={`No ${statusFilter === 'active' ? 'active' : statusFilter === 'on_hold' ? 'on hold' : 'completed'} projects`}
+            description={`You don't have any projects with "${FILTER_TABS.find(t => t.value === statusFilter)?.label}" status.`}
+            actionLabel="View All Projects"
+            onAction={() => setStatusFilter('all')}
+          />
+        )
       )}
 
       {/* Project list */}
