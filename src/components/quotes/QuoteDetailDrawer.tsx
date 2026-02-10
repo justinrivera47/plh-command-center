@@ -232,6 +232,7 @@ export function QuoteDetailDrawer() {
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary">$</span>
                         <input
                           type="number"
+                          step="0.01"
                           {...register('quoted_price')}
                           className="w-full pl-7 pr-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                           placeholder="0"
@@ -244,6 +245,7 @@ export function QuoteDetailDrawer() {
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary">$</span>
                         <input
                           type="number"
+                          step="0.01"
                           {...register('budget_amount')}
                           className="w-full pl-7 pr-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                           placeholder="0"
