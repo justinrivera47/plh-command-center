@@ -36,13 +36,27 @@ const SNOOZE_OPTIONS = [
 export function TaskCard({ task, onClick }: TaskCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [editingField, setEditingField] = useState<string | null>(null);
-  const [latestUpdateText, setLatestUpdateText] = useState(task.latest_update || '');
   const [showSnoozeOptions, setShowSnoozeOptions] = useState(false);
+
+  // Local state for editable fields
+  const [localFollowUpDate, setLocalFollowUpDate] = useState(task.next_action_date || '');
+  const [localLatestUpdate, setLocalLatestUpdate] = useState(task.latest_update || '');
+  const [localStallReason, setLocalStallReason] = useState(task.stall_reason || '');
+
+  // Track unsaved changes and save status
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
   const openMessageComposer = useUIStore((state) => state.openMessageComposer);
   const openQuickEntry = useUIStore((state) => state.openQuickEntry);
   const updateRFI = useUpdateRFI();
   const updateRFIStatus = useUpdateRFIStatus();
+
+  // Update hasUnsavedChanges whenever local values change
+  const handleLocalChange = () => {
+    setHasUnsavedChanges(true);
+    setSaveStatus('idle');
+  };
 
   // Determine if task is stalled (3+ days without activity)
   const isStalled = task.days_since_contact !== null && task.days_since_contact >= 3;
@@ -122,31 +136,38 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
     setShowSnoozeOptions(false);
   };
 
-  const handleUpdateLatest = async () => {
-    if (latestUpdateText !== task.latest_update) {
-      await updateRFI.mutateAsync({
-        id: task.id,
-        latest_update: latestUpdateText || null,
-        last_contacted_at: new Date().toISOString(),
-      });
+  // Save all pending changes
+  const handleSaveChanges = async () => {
+    if (!hasUnsavedChanges) return;
+
+    setSaveStatus('saving');
+
+    const updates: Record<string, unknown> = { id: task.id };
+
+    // Check each field for changes
+    if (localFollowUpDate !== (task.next_action_date || '')) {
+      updates.next_action_date = localFollowUpDate || null;
     }
-    setEditingField(null);
-  };
 
-  const handleFollowUpDateChange = async (date: string) => {
-    await updateRFI.mutateAsync({
-      id: task.id,
-      next_action_date: date || null,
-    });
-    setEditingField(null);
-  };
+    if (localLatestUpdate !== (task.latest_update || '')) {
+      updates.latest_update = localLatestUpdate || null;
+      updates.last_contacted_at = new Date().toISOString();
+    }
 
-  const handleStallReasonChange = async (reason: StallReason | '') => {
-    await updateRFI.mutateAsync({
-      id: task.id,
-      stall_reason: reason || null,
-    });
-    setEditingField(null);
+    if (localStallReason !== (task.stall_reason || '')) {
+      updates.stall_reason = localStallReason || null;
+    }
+
+    try {
+      await updateRFI.mutateAsync(updates as { id: string });
+      setHasUnsavedChanges(false);
+      setSaveStatus('saved');
+      // Reset saved status after 2 seconds
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (error) {
+      setSaveStatus('idle');
+      console.error('Failed to save changes:', error);
+    }
   };
 
   const handleDraftMessage = (e: React.MouseEvent) => {
@@ -392,8 +413,11 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
               <label className="block text-xs font-medium text-text-secondary mb-1">Follow-up Date</label>
               <input
                 type="date"
-                value={task.next_action_date || ''}
-                onChange={(e) => handleFollowUpDateChange(e.target.value)}
+                value={localFollowUpDate}
+                onChange={(e) => {
+                  setLocalFollowUpDate(e.target.value);
+                  handleLocalChange();
+                }}
                 className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
             </div>
@@ -402,9 +426,11 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
             <div>
               <label className="block text-xs font-medium text-text-secondary mb-1">Latest Update</label>
               <textarea
-                value={latestUpdateText}
-                onChange={(e) => setLatestUpdateText(e.target.value)}
-                onBlur={handleUpdateLatest}
+                value={localLatestUpdate}
+                onChange={(e) => {
+                  setLocalLatestUpdate(e.target.value);
+                  handleLocalChange();
+                }}
                 placeholder="Add a note about latest activity..."
                 rows={2}
                 className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
@@ -416,8 +442,11 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
               <div>
                 <label className="block text-xs font-medium text-text-secondary mb-1">Why is this stalled?</label>
                 <select
-                  value={task.stall_reason || ''}
-                  onChange={(e) => handleStallReasonChange(e.target.value as StallReason | '')}
+                  value={localStallReason}
+                  onChange={(e) => {
+                    setLocalStallReason(e.target.value);
+                    handleLocalChange();
+                  }}
                   className="w-full px-3 py-2 border border-border rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
                   <option value="">Not stalled</option>
@@ -447,6 +476,31 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
                 </div>
               </div>
             )}
+
+            {/* Save Changes Button */}
+            <div className="pt-2 border-t border-border">
+              <button
+                onClick={handleSaveChanges}
+                disabled={!hasUnsavedChanges || saveStatus === 'saving'}
+                className={`w-full py-3 text-sm font-medium rounded-lg transition-colors ${
+                  saveStatus === 'saved'
+                    ? 'bg-green-100 text-green-700 border border-green-300'
+                    : hasUnsavedChanges
+                    ? 'bg-primary-600 text-white hover:bg-primary-700'
+                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                {saveStatus === 'saving' ? (
+                  'Saving...'
+                ) : saveStatus === 'saved' ? (
+                  '✓ Changes Saved!'
+                ) : hasUnsavedChanges ? (
+                  'Save Changes'
+                ) : (
+                  'No Changes'
+                )}
+              </button>
+            </div>
           </div>
 
           {/* Bottom action bar - Mobile thumb-friendly */}

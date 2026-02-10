@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useUIStore } from '../../stores/uiStore';
 import { useMessageTemplatesByCategory, interpolateTemplate } from '../../hooks/useMessageTemplates';
@@ -15,27 +15,37 @@ export function MessageComposer() {
   const [body, setBody] = useState('');
   const [copied, setCopied] = useState(false);
 
+  // Track if we've initialized this modal session to avoid resetting on data changes
+  const hasInitializedRef = useRef(false);
+
   // Fetch RFI and project context if available
   const { data: rfi } = useRFI(messageComposerContext?.rfiId);
   const { data: project } = useProject(rfi?.project_id);
 
-  // Reset state and auto-select template when modal opens
+  // Reset state when modal closes
   useEffect(() => {
-    if (messageComposerOpen) {
+    if (!messageComposerOpen) {
+      hasInitializedRef.current = false;
+      setSelectedTemplate(null);
       setSubject('');
       setBody('');
       setCopied(false);
+    }
+  }, [messageComposerOpen]);
+
+  // Auto-select template based on context when modal opens and templates load
+  useEffect(() => {
+    if (messageComposerOpen && groupedTemplates && !hasInitializedRef.current) {
+      hasInitializedRef.current = true;
 
       // Auto-select template based on context if available
-      if (messageComposerContext?.templateCategory && groupedTemplates) {
+      if (messageComposerContext?.templateCategory) {
         const categoryTemplates = groupedTemplates[messageComposerContext.templateCategory];
         if (categoryTemplates && categoryTemplates.length > 0) {
           // Select the first template in the matching category
           setSelectedTemplate(categoryTemplates[0]);
-          return;
         }
       }
-      setSelectedTemplate(null);
     }
   }, [messageComposerOpen, messageComposerContext?.templateCategory, groupedTemplates]);
 
