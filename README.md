@@ -158,13 +158,13 @@ plh-command-center/
 - [x] Protected routes
 - [x] Vercel deployment
 
-### Phase 2: Onboarding 🔄 (In Progress)
+### Phase 2: Onboarding ✅
 - [x] Role selection step
-- [ ] Add Projects step (rapid entry for multiple projects)
-- [ ] First Fire step (create first urgent RFI)
-- [ ] Import or Skip step (CSV import option)
-- [x] Completion step
-- [ ] CSV Import flow
+- [x] Add Projects step (rapid entry for multiple projects)
+- [x] First Fire step (create first urgent RFI)
+- [x] Import or Skip step (CSV import placeholder)
+- [x] Completion step with stats
+- [ ] CSV Import flow (full column mapping - Phase 8)
 
 ### Phase 3: Core App Shell
 - [ ] App layout (mobile tab bar, desktop sidebar)
