@@ -240,6 +240,15 @@ export function ProjectDetail() {
     return { budgeted, actual, itemCount: items.length };
   };
 
+  // Helper to calculate overall project totals from all line items
+  const getProjectTotals = () => {
+    const items = allLineItems || [];
+    const budgeted = items.reduce((sum, li) => sum + (li.budgeted_amount || 0), 0);
+    const actual = items.reduce((sum, li) => sum + (li.actual_amount || 0), 0);
+    return { budgeted, actual };
+  };
+  const projectTotals = getProjectTotals();
+
   // Line item handlers
   const handleAddLineItem = async (areaId: string) => {
     const name = newLineItemName[areaId]?.trim();
@@ -332,8 +341,15 @@ export function ProjectDetail() {
         <h1 className="text-xl font-semibold text-text-primary">{project.name}</h1>
         <div className="text-sm text-text-secondary mt-1">
           {project.client_name && <span>{project.client_name}</span>}
-          {project.total_budget && (
-            <span className="ml-4">Budget: {formatCurrency(project.total_budget)}</span>
+          {(projectTotals.budgeted > 0 || projectTotals.actual > 0) && (
+            <span className="ml-4">
+              Budget: {formatCurrency(projectTotals.budgeted)} | Actual: {formatCurrency(projectTotals.actual)}
+              {projectTotals.budgeted > 0 && (
+                <span className={projectTotals.actual > projectTotals.budgeted ? ' text-red-600' : ' text-green-600'}>
+                  {' '}({((projectTotals.actual / projectTotals.budgeted) * 100).toFixed(0)}%)
+                </span>
+              )}
+            </span>
           )}
         </div>
       </div>

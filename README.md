@@ -116,9 +116,10 @@ plh-command-center/
 - **Stall Detection** - Automatic prompts when tasks aren't moving
 - **Follow-up Tracking** - Visual indicators for overdue follow-ups
 - **Blocking Chain** - Track which tasks are blocking others
+- **Budget Tracking** - Expandable budget areas with line item detail (budgeted vs actual)
 - **Message Templates** - Pre-built templates for common communications
-- **Boss View** - Executive summary with project health indicators
-- **Excel Export** - Generate .xlsx reports for stakeholders
+- **Boss View** - Executive summary with real-time budget data and project health
+- **Excel Export** - Generate .xlsx reports with budget variance analysis
 
 ---
 
@@ -133,6 +134,8 @@ plh-command-center/
 | `vendors` | Vendor/subcontractor database |
 | `rfis` | Tasks and RFIs (Request for Information) |
 | `quotes` | Quote tracking per trade/vendor |
+| `project_budget_areas` | Budget areas (Kitchen, Bathroom, etc.) |
+| `budget_line_items` | Individual items within budget areas |
 | `trade_categories` | Reference list of trades (31 seeded) |
 | `message_templates` | Communication templates (8 seeded) |
 | `change_log` | Audit trail for all changes |

@@ -56,6 +56,74 @@ export function useAllBudgetLineItems(projectId: string | undefined) {
   });
 }
 
+// Budget totals per project for Boss View
+export interface ProjectBudgetTotals {
+  projectId: string;
+  totalBudgeted: number;
+  totalActual: number;
+  variance: number;
+  variancePercent: number | null;
+}
+
+export function useBudgetTotalsByProject() {
+  return useQuery({
+    queryKey: ['budget-totals-by-project'],
+    queryFn: async () => {
+      // Get all budget areas with their project IDs
+      const { data: areas, error: areasError } = await supabase
+        .from('project_budget_areas')
+        .select('id, project_id');
+
+      if (areasError) throw areasError;
+      if (!areas || areas.length === 0) return {};
+
+      // Get all line items
+      const areaIds = areas.map((a) => a.id);
+      const { data: lineItems, error: lineItemsError } = await supabase
+        .from('budget_line_items')
+        .select('budget_area_id, budgeted_amount, actual_amount')
+        .in('budget_area_id', areaIds);
+
+      if (lineItemsError) throw lineItemsError;
+
+      // Build area -> project mapping
+      const areaToProject = new Map(areas.map((a) => [a.id, a.project_id]));
+
+      // Calculate totals per project
+      const projectTotals: Record<string, ProjectBudgetTotals> = {};
+
+      (lineItems || []).forEach((item) => {
+        const projectId = areaToProject.get(item.budget_area_id);
+        if (!projectId) return;
+
+        if (!projectTotals[projectId]) {
+          projectTotals[projectId] = {
+            projectId,
+            totalBudgeted: 0,
+            totalActual: 0,
+            variance: 0,
+            variancePercent: null,
+          };
+        }
+
+        projectTotals[projectId].totalBudgeted += item.budgeted_amount || 0;
+        projectTotals[projectId].totalActual += item.actual_amount || 0;
+      });
+
+      // Calculate variance for each project
+      Object.values(projectTotals).forEach((totals) => {
+        totals.variance = totals.totalActual - totals.totalBudgeted;
+        totals.variancePercent = totals.totalBudgeted > 0
+          ? (totals.variance / totals.totalBudgeted) * 100
+          : null;
+      });
+
+      return projectTotals;
+    },
+    staleTime: 10000, // Cache for 10 seconds
+  });
+}
+
 export function useCreateBudgetLineItem() {
   const queryClient = useQueryClient();
   const { logCreation } = useChangeLog();
@@ -102,7 +170,9 @@ export function useCreateBudgetLineItem() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['budget-line-items', data.budget_area_id] });
       queryClient.invalidateQueries({ queryKey: ['budget-line-items-all', data.projectId] });
+      queryClient.invalidateQueries({ queryKey: ['budget-totals-by-project'] });
       queryClient.invalidateQueries({ queryKey: ['project-activity', data.projectId] });
+      queryClient.invalidateQueries({ queryKey: ['recent-activity-by-project'] });
     },
   });
 }
@@ -163,7 +233,9 @@ export function useUpdateBudgetLineItem() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['budget-line-items', data.budget_area_id] });
       queryClient.invalidateQueries({ queryKey: ['budget-line-items-all', data.projectId] });
+      queryClient.invalidateQueries({ queryKey: ['budget-totals-by-project'] });
       queryClient.invalidateQueries({ queryKey: ['project-activity', data.projectId] });
+      queryClient.invalidateQueries({ queryKey: ['recent-activity-by-project'] });
     },
   });
 }
@@ -211,7 +283,9 @@ export function useDeleteBudgetLineItem() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['budget-line-items', data.budget_area_id] });
       queryClient.invalidateQueries({ queryKey: ['budget-line-items-all', data.projectId] });
+      queryClient.invalidateQueries({ queryKey: ['budget-totals-by-project'] });
       queryClient.invalidateQueries({ queryKey: ['project-activity', data.projectId] });
+      queryClient.invalidateQueries({ queryKey: ['recent-activity-by-project'] });
     },
   });
 }

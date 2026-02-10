@@ -6,6 +6,7 @@ const navItems = [
   { to: '/war-room', label: 'War Room', icon: '🎯' },
   { to: '/projects', label: 'Projects', icon: '📁' },
   { to: '/quotes', label: 'Quotes', icon: '💰' },
+  { to: '/budget', label: 'Budget', icon: '📊' },
   { to: '/vendors', label: 'Vendors', icon: '🏢' },
 ];
 

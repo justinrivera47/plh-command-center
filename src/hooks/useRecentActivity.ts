@@ -52,6 +52,10 @@ export function useRecentActivityByProject(limit: number = 5) {
         .from('project_budget_areas')
         .select('id, project_id');
 
+      const { data: budgetLineItems } = await supabase
+        .from('budget_line_items')
+        .select('id, budget_area_id');
+
       const { data: rfis } = await supabase
         .from('rfis')
         .select('id, project_id');
@@ -60,6 +64,15 @@ export function useRecentActivityByProject(limit: number = 5) {
       const quoteProjectMap = new Map(quotes?.map((q) => [q.id, q.project_id]) || []);
       const budgetProjectMap = new Map(budgetAreas?.map((b) => [b.id, b.project_id]) || []);
       const rfiProjectMap = new Map(rfis?.map((r) => [r.id, r.project_id]) || []);
+
+      // Build line item -> project map (line item -> budget area -> project)
+      const lineItemProjectMap = new Map<string, string>();
+      (budgetLineItems || []).forEach((li) => {
+        const projectId = budgetProjectMap.get(li.budget_area_id);
+        if (projectId) {
+          lineItemProjectMap.set(li.id, projectId);
+        }
+      });
 
       // Group activity by project
       const projectActivity: Record<string, ActivityEntry[]> = {};
@@ -79,6 +92,8 @@ export function useRecentActivityByProject(limit: number = 5) {
           projectId = quoteProjectMap.get(change.record_id);
         } else if (change.record_type === 'budget_area') {
           projectId = budgetProjectMap.get(change.record_id);
+        } else if (change.record_type === 'budget_line_item') {
+          projectId = lineItemProjectMap.get(change.record_id);
         } else if (change.record_type === 'rfi') {
           projectId = rfiProjectMap.get(change.record_id);
         }
@@ -132,12 +147,16 @@ function formatActivityDescription(recordType: string, fieldName: string, note: 
       rfi: 'Task created',
       quote: 'Quote logged',
       budget_area: 'Budget area added',
+      budget_line_item: 'Budget item added',
     };
     return note || typeLabels[recordType] || `${capitalize(recordType)} created`;
   }
 
   if (fieldName === '_deleted') {
-    return note || `${capitalize(recordType)} deleted`;
+    const deleteLabels: Record<string, string> = {
+      budget_line_item: 'Budget item removed',
+    };
+    return note || deleteLabels[recordType] || `${capitalize(recordType)} deleted`;
   }
 
   // Field updates
@@ -148,9 +167,16 @@ function formatActivityDescription(recordType: string, fieldName: string, note: 
     actual_amount: 'Actual cost updated',
     priority: 'Priority changed',
     is_blocking: 'Blocking status changed',
+    item_name: 'Budget item renamed',
   };
 
-  return fieldLabels[fieldName] || `${capitalize(recordType)} updated`;
+  // Type-specific field labels
+  if (recordType === 'budget_line_item') {
+    if (fieldName === 'budgeted_amount') return note || 'Budget item estimate updated';
+    if (fieldName === 'actual_amount') return note || 'Budget item actual updated';
+  }
+
+  return note || fieldLabels[fieldName] || `${capitalize(recordType)} updated`;
 }
 
 function formatRFIActivity(prevStatus: string | null, newStatus: string, taskName?: string): string {

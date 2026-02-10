@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useProjects } from '../../hooks/useProjects';
+import { useBudgetTotalsByProject } from '../../hooks/useBudgetLineItems';
 import { ProjectCard } from './ProjectCard';
 import { EmptyState } from '../shared/EmptyState';
 import { SkeletonList } from '../shared/SkeletonCard';
@@ -15,6 +16,7 @@ const FILTER_TABS: { value: ProjectStatus | 'all'; label: string }[] = [
 
 export function ProjectList() {
   const { data: projects, isLoading, error } = useProjects();
+  const { data: budgetTotalsByProject } = useBudgetTotalsByProject();
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'all'>('active');
   const openQuickEntry = useUIStore((state) => state.openQuickEntry);
 
@@ -72,7 +74,11 @@ export function ProjectList() {
       {!isLoading && filteredProjects && filteredProjects.length > 0 && (
         <div className="space-y-3">
           {filteredProjects.map((project) => (
-            <ProjectCard key={project.id} project={project} />
+            <ProjectCard
+              key={project.id}
+              project={project}
+              budgetTotals={budgetTotalsByProject?.[project.id]}
+            />
           ))}
         </div>
       )}

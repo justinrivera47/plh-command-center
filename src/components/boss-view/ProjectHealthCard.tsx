@@ -1,6 +1,7 @@
 import type { Project, WarRoomItem, QuoteComparison } from '../../lib/types';
 import type { DecisionNeeded } from '../../hooks/useDecisionsNeeded';
 import type { ActivityEntry } from '../../hooks/useRecentActivity';
+import type { ProjectBudgetTotals } from '../../hooks/useBudgetLineItems';
 
 interface ProjectHealthCardProps {
   project: Project;
@@ -8,6 +9,7 @@ interface ProjectHealthCardProps {
   quotes: QuoteComparison[];
   recentActivity?: ActivityEntry[];
   decisionsNeeded?: DecisionNeeded[];
+  budgetTotals?: ProjectBudgetTotals;
   expanded: boolean;
   onToggle: () => void;
 }
@@ -18,6 +20,7 @@ export function ProjectHealthCard({
   quotes,
   recentActivity = [],
   decisionsNeeded = [],
+  budgetTotals,
   expanded,
   onToggle,
 }: ProjectHealthCardProps) {
@@ -27,10 +30,13 @@ export function ProjectHealthCard({
   const overdueTasks = tasks.filter((t) => t.is_overdue).length;
   const waitingOnMe = tasks.filter((t) => t.status === 'waiting_on_me').length;
 
-  // Budget metrics
-  const budget = project.total_budget || 0;
+  // Budget metrics from line items (real-time)
+  const totalBudgeted = budgetTotals?.totalBudgeted || 0;
+  const totalActual = budgetTotals?.totalActual || 0;
+  const budgetVariance = totalActual - totalBudgeted;
+  const budgetUtilization = totalBudgeted > 0 ? (totalActual / totalBudgeted) * 100 : 0;
 
-  // Quote breakdown
+  // Quote breakdown (for display purposes)
   const approvedQuotes = quotes.filter((q) =>
     ['approved', 'signed', 'contract_sent', 'in_progress', 'completed'].includes(q.status)
   );
@@ -40,11 +46,6 @@ export function ProjectHealthCard({
   const overBudgetQuotes = quotes.filter((q) =>
     q.budget_variance !== null && q.budget_variance > 0
   );
-
-  const committedAmount = approvedQuotes.reduce((sum, q) => sum + (q.quoted_price || 0), 0);
-  const pendingAmount = pendingQuotes.reduce((sum, q) => sum + (q.quoted_price || 0), 0);
-  const totalQuoted = committedAmount + pendingAmount;
-  const budgetUtilization = budget > 0 ? (totalQuoted / budget) * 100 : 0;
 
   // Project-specific decisions
   const projectDecisions = decisionsNeeded.filter((d) => d.projectId === project.id);
@@ -181,37 +182,39 @@ export function ProjectHealthCard({
             <MiniStat label="On Me" value={waitingOnMe} color={waitingOnMe > 0 ? 'text-amber-600' : undefined} />
           </div>
 
-          {/* Enhanced Budget Section */}
-          {budget > 0 && (
+          {/* Enhanced Budget Section - from line items */}
+          {totalBudgeted > 0 && (
             <div className="mb-4">
               <div className="flex justify-between text-sm mb-1">
-                <span className="text-text-secondary">Budget Utilization</span>
+                <span className="text-text-secondary">Budget vs Actual</span>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-sm mb-2">
+              <div className="grid grid-cols-3 gap-2 text-sm mb-2">
                 <div>
-                  <span className="text-text-secondary">Committed: </span>
-                  <span className="font-medium text-green-600">{formatCurrency(committedAmount)}</span>
+                  <span className="text-text-secondary">Budgeted: </span>
+                  <span className="font-medium">{formatCurrency(totalBudgeted)}</span>
                 </div>
                 <div>
-                  <span className="text-text-secondary">Pending: </span>
-                  <span className="font-medium text-amber-600">{formatCurrency(pendingAmount)}</span>
+                  <span className="text-text-secondary">Actual: </span>
+                  <span className="font-medium">{formatCurrency(totalActual)}</span>
+                </div>
+                <div>
+                  <span className="text-text-secondary">Variance: </span>
+                  <span className={`font-medium ${budgetVariance > 0 ? 'text-red-600' : budgetVariance < 0 ? 'text-green-600' : ''}`}>
+                    {budgetVariance > 0 ? '+' : ''}{formatCurrency(budgetVariance)}
+                  </span>
                 </div>
               </div>
-              {/* Stacked progress bar */}
-              <div className="h-3 bg-gray-200 rounded-full overflow-hidden flex">
+              {/* Progress bar */}
+              <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-green-500"
-                  style={{ width: `${Math.min((committedAmount / budget) * 100, 100)}%` }}
-                />
-                <div
-                  className="h-full bg-amber-400"
-                  style={{ width: `${Math.min((pendingAmount / budget) * 100, Math.max(100 - (committedAmount / budget) * 100, 0))}%` }}
+                  className={`h-full ${budgetUtilization > 100 ? 'bg-red-500' : 'bg-green-500'}`}
+                  style={{ width: `${Math.min(budgetUtilization, 100)}%` }}
                 />
               </div>
               <div className="flex justify-between text-xs text-text-secondary mt-1">
-                <span>{formatCurrency(budget)} budget</span>
+                <span>{formatCurrency(totalBudgeted)} budgeted</span>
                 <span className={budgetUtilization > 100 ? 'text-red-600 font-medium' : ''}>
-                  {budgetUtilization.toFixed(0)}% allocated
+                  {budgetUtilization.toFixed(0)}% spent
                 </span>
               </div>
             </div>

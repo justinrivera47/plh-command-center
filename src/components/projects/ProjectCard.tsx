@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { Project } from '../../lib/types';
+import type { ProjectBudgetTotals } from '../../hooks/useBudgetLineItems';
 import { useProjectRFICounts } from '../../hooks/useRFIs';
 import { useOpenRFIs } from '../../hooks/useRFIs';
 import { PriorityBadge } from '../shared/PriorityBadge';
@@ -8,9 +9,10 @@ import { StatusBadge } from '../shared/StatusBadge';
 
 interface ProjectCardProps {
   project: Project;
+  budgetTotals?: ProjectBudgetTotals;
 }
 
-export function ProjectCard({ project }: ProjectCardProps) {
+export function ProjectCard({ project, budgetTotals }: ProjectCardProps) {
   const [expanded, setExpanded] = useState(false);
   const { data: counts } = useProjectRFICounts(project.id);
   const { data: rfis } = useOpenRFIs(project.id);
@@ -45,9 +47,9 @@ export function ProjectCard({ project }: ProjectCardProps) {
             <div className="text-sm text-text-secondary mt-1">
               {project.client_name || 'No client'}
             </div>
-            {project.total_budget && (
+            {budgetTotals && (budgetTotals.totalBudgeted > 0 || budgetTotals.totalActual > 0) && (
               <div className="text-sm text-text-secondary">
-                Budget: {formatCurrency(project.total_budget)}
+                Budget: {formatCurrency(budgetTotals.totalBudgeted)} | Actual: {formatCurrency(budgetTotals.totalActual)}
               </div>
             )}
           </div>

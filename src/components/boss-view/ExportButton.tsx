@@ -1,26 +1,33 @@
 import * as XLSX from 'xlsx';
 import type { Project, WarRoomItem, QuoteComparison } from '../../lib/types';
+import type { ProjectBudgetTotals } from '../../hooks/useBudgetLineItems';
 
 interface ExportButtonProps {
   projects: Project[] | undefined;
   tasks: WarRoomItem[] | undefined;
   quotes: QuoteComparison[] | undefined;
+  budgetTotalsByProject?: Record<string, ProjectBudgetTotals>;
 }
 
-export function ExportButton({ projects, tasks, quotes }: ExportButtonProps) {
+export function ExportButton({ projects, tasks, quotes, budgetTotalsByProject }: ExportButtonProps) {
   const handleExport = () => {
     // Create workbook
     const wb = XLSX.utils.book_new();
 
     // Projects sheet
     if (projects && projects.length > 0) {
-      const projectsData = projects.map((p) => ({
-        'Project Name': p.name,
-        'Client': p.client_name || '',
-        'Address': p.address || '',
-        'Status': p.status,
-        'Total Budget': p.total_budget || '',
-      }));
+      const projectsData = projects.map((p) => {
+        const budgetTotals = budgetTotalsByProject?.[p.id];
+        return {
+          'Project Name': p.name,
+          'Client': p.client_name || '',
+          'Address': p.address || '',
+          'Status': p.status,
+          'Total Budgeted': budgetTotals?.totalBudgeted || 0,
+          'Total Actual': budgetTotals?.totalActual || 0,
+          'Variance': budgetTotals?.variance || 0,
+        };
+      });
       const projectsSheet = XLSX.utils.json_to_sheet(projectsData);
       XLSX.utils.book_append_sheet(wb, projectsSheet, 'Projects');
     }
@@ -58,6 +65,11 @@ export function ExportButton({ projects, tasks, quotes }: ExportButtonProps) {
       XLSX.utils.book_append_sheet(wb, quotesSheet, 'Quotes');
     }
 
+    // Calculate budget totals from line items
+    const budgetTotalsArray = Object.values(budgetTotalsByProject || {});
+    const totalBudgeted = budgetTotalsArray.reduce((sum, t) => sum + t.totalBudgeted, 0);
+    const totalActual = budgetTotalsArray.reduce((sum, t) => sum + t.totalActual, 0);
+
     // Summary sheet
     const summaryData = [
       { 'Metric': 'Active Projects', 'Value': projects?.length || 0 },
@@ -67,8 +79,16 @@ export function ExportButton({ projects, tasks, quotes }: ExportButtonProps) {
       { 'Metric': 'Tasks Waiting on Me', 'Value': tasks?.filter((t) => t.status === 'waiting_on_me').length || 0 },
       { 'Metric': 'Total Quotes', 'Value': quotes?.length || 0 },
       {
-        'Metric': 'Total Budget',
-        'Value': formatCurrency(projects?.reduce((sum, p) => sum + (p.total_budget || 0), 0) || 0),
+        'Metric': 'Total Budgeted',
+        'Value': formatCurrency(totalBudgeted),
+      },
+      {
+        'Metric': 'Total Actual',
+        'Value': formatCurrency(totalActual),
+      },
+      {
+        'Metric': 'Budget Variance',
+        'Value': formatCurrency(totalActual - totalBudgeted),
       },
       {
         'Metric': 'Total Quoted',

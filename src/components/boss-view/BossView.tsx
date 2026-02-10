@@ -5,6 +5,7 @@ import { useWarRoom } from '../../hooks/useWarRoom';
 import { useQuotes } from '../../hooks/useQuotes';
 import { useDecisionsNeeded } from '../../hooks/useDecisionsNeeded';
 import { useRecentActivityByProject } from '../../hooks/useRecentActivity';
+import { useBudgetTotalsByProject } from '../../hooks/useBudgetLineItems';
 import { ProjectHealthCard } from './ProjectHealthCard';
 import { ExportButton } from './ExportButton';
 import { SkeletonList } from '../shared/SkeletonCard';
@@ -17,6 +18,7 @@ export function BossView() {
   const { data: quotes, isLoading: quotesLoading } = useQuotes();
   const { data: decisionsNeeded } = useDecisionsNeeded();
   const { data: activityByProject } = useRecentActivityByProject(5);
+  const { data: budgetTotalsByProject } = useBudgetTotalsByProject();
   const [expandedProject, setExpandedProject] = useState<string | null>(null);
 
   // Invalidate queries on mount to ensure fresh data for executive view
@@ -26,6 +28,7 @@ export function BossView() {
     queryClient.invalidateQueries({ queryKey: ['quotes'] });
     queryClient.invalidateQueries({ queryKey: ['decisions-needed'] });
     queryClient.invalidateQueries({ queryKey: ['recent-activity-by-project'] });
+    queryClient.invalidateQueries({ queryKey: ['budget-totals-by-project'] });
   }, [queryClient]);
 
   const isLoading = projectsLoading || tasksLoading || quotesLoading;
@@ -35,9 +38,10 @@ export function BossView() {
   const blockingTasks = tasks?.filter((t: WarRoomItem) => t.is_blocking).length || 0;
   const overdueTasks = tasks?.filter((t: WarRoomItem) => t.is_overdue).length || 0;
 
-  // Calculate budget stats
-  const totalBudget = projects?.reduce((sum, p) => sum + (p.total_budget || 0), 0) || 0;
-  const totalQuoted = quotes?.reduce((sum, q) => sum + (q.quoted_price || 0), 0) || 0;
+  // Calculate budget stats from line items (real-time data)
+  const budgetTotalsArray = Object.values(budgetTotalsByProject || {});
+  const totalBudgeted = budgetTotalsArray.reduce((sum, t) => sum + t.totalBudgeted, 0);
+  const totalActual = budgetTotalsArray.reduce((sum, t) => sum + t.totalActual, 0);
 
   return (
     <div className="px-4 py-6">
@@ -47,7 +51,7 @@ export function BossView() {
           <h1 className="text-xl font-semibold text-text-primary">Boss View</h1>
           <p className="text-sm text-text-secondary">Executive summary of all projects</p>
         </div>
-        <ExportButton projects={projects} tasks={tasks} quotes={quotes} />
+        <ExportButton projects={projects} tasks={tasks} quotes={quotes} budgetTotalsByProject={budgetTotalsByProject} />
       </div>
 
       {/* Overall Stats */}
@@ -83,34 +87,42 @@ export function BossView() {
       {/* Budget Summary */}
       <div className="bg-white rounded-lg border border-border p-4 mb-6">
         <h2 className="font-medium text-text-primary mb-3">Budget Overview</h2>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           <div>
-            <p className="text-sm text-text-secondary">Total Budget</p>
+            <p className="text-sm text-text-secondary">Total Budgeted</p>
             <p className="text-2xl font-semibold text-text-primary">
-              {formatCurrency(totalBudget)}
+              {formatCurrency(totalBudgeted)}
             </p>
           </div>
           <div>
-            <p className="text-sm text-text-secondary">Total Quoted</p>
+            <p className="text-sm text-text-secondary">Total Actual</p>
             <p className="text-2xl font-semibold text-text-primary">
-              {formatCurrency(totalQuoted)}
+              {formatCurrency(totalActual)}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-text-secondary">Variance</p>
+            <p className={`text-2xl font-semibold ${
+              totalActual > totalBudgeted ? 'text-red-600' : totalActual < totalBudgeted ? 'text-green-600' : 'text-text-primary'
+            }`}>
+              {totalActual - totalBudgeted > 0 ? '+' : ''}{formatCurrency(totalActual - totalBudgeted)}
             </p>
           </div>
         </div>
-        {totalBudget > 0 && (
+        {totalBudgeted > 0 && (
           <div className="mt-4">
             <div className="flex justify-between text-sm mb-1">
-              <span className="text-text-secondary">Quoted vs Budget</span>
-              <span className={totalQuoted > totalBudget ? 'text-red-600' : 'text-green-600'}>
-                {((totalQuoted / totalBudget) * 100).toFixed(0)}%
+              <span className="text-text-secondary">Actual vs Budget</span>
+              <span className={totalActual > totalBudgeted ? 'text-red-600' : 'text-green-600'}>
+                {((totalActual / totalBudgeted) * 100).toFixed(0)}%
               </span>
             </div>
             <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all ${
-                  totalQuoted > totalBudget ? 'bg-red-500' : 'bg-green-500'
+                  totalActual > totalBudgeted ? 'bg-red-500' : 'bg-green-500'
                 }`}
-                style={{ width: `${Math.min((totalQuoted / totalBudget) * 100, 100)}%` }}
+                style={{ width: `${Math.min((totalActual / totalBudgeted) * 100, 100)}%` }}
               />
             </div>
           </div>
@@ -160,6 +172,8 @@ export function BossView() {
           const projectTasks = tasks?.filter((t: WarRoomItem) => t.project_id === project.id) || [];
           const projectQuotes = quotes?.filter((q) => q.project_id === project.id) || [];
 
+          const projectBudgetTotals = budgetTotalsByProject?.[project.id];
+
           return (
             <ProjectHealthCard
               key={project.id}
@@ -168,6 +182,7 @@ export function BossView() {
               quotes={projectQuotes}
               recentActivity={activityByProject?.[project.id] || []}
               decisionsNeeded={decisionsNeeded || []}
+              budgetTotals={projectBudgetTotals}
               expanded={expandedProject === project.id}
               onToggle={() => setExpandedProject(
                 expandedProject === project.id ? null : project.id

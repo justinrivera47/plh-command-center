@@ -23,6 +23,7 @@ import { QuoteTracker } from './components/quotes/QuoteTracker';
 import { VendorList } from './components/vendors/VendorList';
 import { VendorDetail } from './components/vendors/VendorDetail';
 import { BossView } from './components/boss-view/BossView';
+import { BudgetDashboard } from './components/budget-dashboard/BudgetDashboard';
 import { SettingsPage } from './components/settings/SettingsPage';
 
 // Configure TanStack Query
@@ -130,6 +131,7 @@ function App() {
               <Route path="projects" element={<ProjectList />} />
               <Route path="projects/:projectId" element={<ProjectDetail />} />
               <Route path="quotes" element={<QuoteTracker />} />
+              <Route path="budget" element={<BudgetDashboard />} />
               <Route path="vendors" element={<VendorList />} />
               <Route path="vendors/:vendorId" element={<VendorDetail />} />
               <Route path="boss-view" element={<BossView />} />
