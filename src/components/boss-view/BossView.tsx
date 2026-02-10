@@ -1,0 +1,166 @@
+import { useState } from 'react';
+import { useActiveProjects } from '../../hooks/useProjects';
+import { useWarRoom } from '../../hooks/useWarRoom';
+import { useQuotes } from '../../hooks/useQuotes';
+import { ProjectHealthCard } from './ProjectHealthCard';
+import { ExportButton } from './ExportButton';
+import { SkeletonList } from '../shared/SkeletonCard';
+import type { WarRoomItem } from '../../lib/types';
+
+export function BossView() {
+  const { data: projects, isLoading: projectsLoading } = useActiveProjects();
+  const { data: tasks, isLoading: tasksLoading } = useWarRoom();
+  const { data: quotes, isLoading: quotesLoading } = useQuotes();
+  const [expandedProject, setExpandedProject] = useState<string | null>(null);
+
+  const isLoading = projectsLoading || tasksLoading || quotesLoading;
+
+  // Calculate overall stats
+  const totalTasks = tasks?.length || 0;
+  const blockingTasks = tasks?.filter((t: WarRoomItem) => t.is_blocking).length || 0;
+  const overdueTasks = tasks?.filter((t: WarRoomItem) => t.is_overdue).length || 0;
+
+  // Calculate budget stats
+  const totalBudget = projects?.reduce((sum, p) => sum + (p.total_budget || 0), 0) || 0;
+  const totalQuoted = quotes?.reduce((sum, q) => sum + (q.quoted_price || 0), 0) || 0;
+
+  return (
+    <div className="px-4 py-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-xl font-semibold text-text-primary">Boss View</h1>
+          <p className="text-sm text-text-secondary">Executive summary of all projects</p>
+        </div>
+        <ExportButton projects={projects} tasks={tasks} quotes={quotes} />
+      </div>
+
+      {/* Overall Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <StatCard
+          label="Active Projects"
+          value={projects?.length || 0}
+          icon="📁"
+          color="bg-blue-50 text-blue-700"
+        />
+        <StatCard
+          label="Open Tasks"
+          value={totalTasks}
+          icon="📋"
+          color="bg-gray-50 text-gray-700"
+        />
+        <StatCard
+          label="Blocking"
+          value={blockingTasks}
+          icon="🚧"
+          color={blockingTasks > 0 ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-700'}
+          alert={blockingTasks > 0}
+        />
+        <StatCard
+          label="Overdue"
+          value={overdueTasks}
+          icon="⚠️"
+          color={overdueTasks > 0 ? 'bg-amber-50 text-amber-700' : 'bg-gray-50 text-gray-700'}
+          alert={overdueTasks > 0}
+        />
+      </div>
+
+      {/* Budget Summary */}
+      <div className="bg-white rounded-lg border border-border p-4 mb-6">
+        <h2 className="font-medium text-text-primary mb-3">Budget Overview</h2>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-sm text-text-secondary">Total Budget</p>
+            <p className="text-2xl font-semibold text-text-primary">
+              {formatCurrency(totalBudget)}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-text-secondary">Total Quoted</p>
+            <p className="text-2xl font-semibold text-text-primary">
+              {formatCurrency(totalQuoted)}
+            </p>
+          </div>
+        </div>
+        {totalBudget > 0 && (
+          <div className="mt-4">
+            <div className="flex justify-between text-sm mb-1">
+              <span className="text-text-secondary">Quoted vs Budget</span>
+              <span className={totalQuoted > totalBudget ? 'text-red-600' : 'text-green-600'}>
+                {((totalQuoted / totalBudget) * 100).toFixed(0)}%
+              </span>
+            </div>
+            <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  totalQuoted > totalBudget ? 'bg-red-500' : 'bg-green-500'
+                }`}
+                style={{ width: `${Math.min((totalQuoted / totalBudget) * 100, 100)}%` }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Project Health Cards */}
+      <div className="space-y-4">
+        <h2 className="font-medium text-text-primary">Project Health</h2>
+
+        {isLoading && <SkeletonList count={3} />}
+
+        {!isLoading && projects?.map((project) => {
+          const projectTasks = tasks?.filter((t: WarRoomItem) => t.project_id === project.id) || [];
+          const projectQuotes = quotes?.filter((q) => q.project_id === project.id) || [];
+
+          return (
+            <ProjectHealthCard
+              key={project.id}
+              project={project}
+              tasks={projectTasks}
+              quotes={projectQuotes}
+              expanded={expandedProject === project.id}
+              onToggle={() => setExpandedProject(
+                expandedProject === project.id ? null : project.id
+              )}
+            />
+          );
+        })}
+
+        {!isLoading && (!projects || projects.length === 0) && (
+          <div className="text-center py-8 text-text-secondary">
+            <div className="text-4xl mb-2">📊</div>
+            <p>No active projects</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface StatCardProps {
+  label: string;
+  value: number;
+  icon: string;
+  color: string;
+  alert?: boolean;
+}
+
+function StatCard({ label, value, icon, color, alert }: StatCardProps) {
+  return (
+    <div className={`rounded-lg p-4 ${color} ${alert ? 'ring-2 ring-offset-1 ring-current' : ''}`}>
+      <div className="flex items-center gap-2">
+        <span className="text-lg">{icon}</span>
+        <span className="text-2xl font-semibold">{value}</span>
+      </div>
+      <p className="text-sm mt-1">{label}</p>
+    </div>
+  );
+}
+
+function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(amount);
+}

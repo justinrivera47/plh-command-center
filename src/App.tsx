@@ -15,12 +15,13 @@ import { SignUpPage } from './components/auth/SignUpPage';
 // Onboarding
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
 
-// Main views (placeholder components for now)
+// Main views
 import { WarRoom } from './components/war-room/WarRoom';
 import { ProjectList } from './components/projects/ProjectList';
 import { ProjectDetail } from './components/projects/ProjectDetail';
 import { QuoteTracker } from './components/quotes/QuoteTracker';
 import { VendorList } from './components/vendors/VendorList';
+import { BossView } from './components/boss-view/BossView';
 
 // Configure TanStack Query
 const queryClient = new QueryClient({
@@ -128,6 +129,7 @@ function App() {
               <Route path="projects/:projectId" element={<ProjectDetail />} />
               <Route path="quotes" element={<QuoteTracker />} />
               <Route path="vendors" element={<VendorList />} />
+              <Route path="boss-view" element={<BossView />} />
             </Route>
 
             {/* Fallback */}
