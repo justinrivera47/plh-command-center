@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useActiveProjects } from '../../hooks/useProjects';
 import { useWarRoom } from '../../hooks/useWarRoom';
 import { useQuotes } from '../../hooks/useQuotes';
@@ -8,10 +9,18 @@ import { SkeletonList } from '../shared/SkeletonCard';
 import type { WarRoomItem } from '../../lib/types';
 
 export function BossView() {
+  const queryClient = useQueryClient();
   const { data: projects, isLoading: projectsLoading } = useActiveProjects();
   const { data: tasks, isLoading: tasksLoading } = useWarRoom();
   const { data: quotes, isLoading: quotesLoading } = useQuotes();
   const [expandedProject, setExpandedProject] = useState<string | null>(null);
+
+  // Invalidate queries on mount to ensure fresh data for executive view
+  useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: ['projects'] });
+    queryClient.invalidateQueries({ queryKey: ['war-room'] });
+    queryClient.invalidateQueries({ queryKey: ['quotes'] });
+  }, [queryClient]);
 
   const isLoading = projectsLoading || tasksLoading || quotesLoading;
 
