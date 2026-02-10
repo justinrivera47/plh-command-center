@@ -83,6 +83,94 @@ export function useUpdateQuote() {
   });
 }
 
+// Update quote with change logging
+export function useUpdateQuoteWithLog() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      updates,
+      userId,
+    }: {
+      id: string;
+      updates: Partial<Quote>;
+      userId: string;
+    }) => {
+      // Get current quote to compare changes
+      const { data: currentQuote, error: fetchError } = await supabase
+        .from('quotes')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Update the quote
+      const { data: updatedQuote, error: updateError } = await supabase
+        .from('quotes')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+
+      // Log changes
+      const changes: { field: string; old: unknown; new: unknown }[] = [];
+      for (const [key, newValue] of Object.entries(updates)) {
+        const oldValue = (currentQuote as Record<string, unknown>)[key];
+        if (oldValue !== newValue) {
+          changes.push({ field: key, old: oldValue, new: newValue });
+        }
+      }
+
+      if (changes.length > 0) {
+        const logEntries = changes.map((change) => ({
+          record_type: 'quote',
+          record_id: id,
+          field_name: change.field,
+          old_value: change.old != null ? String(change.old) : null,
+          new_value: change.new != null ? String(change.new) : null,
+          changed_by: userId,
+          note: null,
+        }));
+
+        await supabase.from('change_log').insert(logEntries);
+      }
+
+      return updatedQuote as Quote;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['quotes'] });
+      queryClient.invalidateQueries({ queryKey: ['quotes', data.id] });
+      queryClient.invalidateQueries({ queryKey: ['quote-history'] });
+    },
+  });
+}
+
+// Get change history for a quote
+export function useQuoteHistory(quoteId: string | undefined) {
+  return useQuery({
+    queryKey: ['quote-history', quoteId],
+    queryFn: async () => {
+      if (!quoteId) return [];
+
+      const { data, error } = await supabase
+        .from('change_log')
+        .select('*')
+        .eq('record_type', 'quote')
+        .eq('record_id', quoteId)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!quoteId,
+  });
+}
+
 // Get quotes grouped by trade for a project
 export function useQuotesByTrade(projectId?: string) {
   const { data: quotes, ...rest } = useQuotes(projectId);

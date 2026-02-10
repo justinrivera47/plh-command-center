@@ -15,6 +15,12 @@ interface UIState {
   openQuickEntry: (type: UIState['quickEntryType']) => void;
   closeQuickEntry: () => void;
 
+  // Quote detail drawer
+  quoteDrawerOpen: boolean;
+  quoteDrawerId: string | null;
+  openQuoteDrawer: (quoteId: string) => void;
+  closeQuoteDrawer: () => void;
+
   // Selected project context (for quick entry defaults)
   selectedProjectId: string | null;
   setSelectedProjectId: (id: string | null) => void;
@@ -56,6 +62,12 @@ export const useUIStore = create<UIState>((set) => ({
   quickEntryType: null,
   openQuickEntry: (type) => set({ quickEntryOpen: true, quickEntryType: type }),
   closeQuickEntry: () => set({ quickEntryOpen: false, quickEntryType: null }),
+
+  // Quote detail drawer
+  quoteDrawerOpen: false,
+  quoteDrawerId: null,
+  openQuoteDrawer: (quoteId) => set({ quoteDrawerOpen: true, quoteDrawerId: quoteId }),
+  closeQuoteDrawer: () => set({ quoteDrawerOpen: false, quoteDrawerId: null }),
 
   // Selected project context
   selectedProjectId: null,

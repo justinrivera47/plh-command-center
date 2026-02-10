@@ -1,17 +1,31 @@
 import { useState } from 'react';
-import { useQuotesByTrade } from '../../hooks/useQuotes';
+import { useQuotesByTrade, useUpdateQuoteWithLog } from '../../hooks/useQuotes';
 import { useActiveProjects } from '../../hooks/useProjects';
 import { EmptyState } from '../shared/EmptyState';
 import { SkeletonList } from '../shared/SkeletonCard';
 import { useUIStore } from '../../stores/uiStore';
+import { useAuth } from '../../hooks/useAuth';
 import { QUOTE_STATUS_CONFIG } from '../../lib/constants';
-import type { QuoteComparison } from '../../lib/types';
+import { QuoteDetailDrawer } from './QuoteDetailDrawer';
+import type { QuoteComparison, QuoteStatus } from '../../lib/types';
+
+const QUOTE_STATUS_ORDER: QuoteStatus[] = [
+  'pending',
+  'quoted',
+  'approved',
+  'declined',
+  'contract_sent',
+  'signed',
+  'in_progress',
+  'completed',
+];
 
 export function QuoteTracker() {
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
   const { data: projects } = useActiveProjects();
   const { data: groupedQuotes, isLoading, error } = useQuotesByTrade(projectFilter || undefined);
   const openQuickEntry = useUIStore((state) => state.openQuickEntry);
+  const openQuoteDrawer = useUIStore((state) => state.openQuoteDrawer);
 
   const formatCurrency = (amount: number | null) => {
     if (!amount) return '—';
@@ -84,13 +98,21 @@ export function QuoteTracker() {
               {/* Quote rows */}
               <div className="divide-y divide-border">
                 {quotes.map((quote) => (
-                  <QuoteRow key={quote.id} quote={quote} formatCurrency={formatCurrency} />
+                  <QuoteRow
+                    key={quote.id}
+                    quote={quote}
+                    formatCurrency={formatCurrency}
+                    onRowClick={() => openQuoteDrawer(quote.id)}
+                  />
                 ))}
               </div>
             </div>
           ))}
         </div>
       )}
+
+      {/* Quote Detail Drawer */}
+      <QuoteDetailDrawer />
     </div>
   );
 }
@@ -98,11 +120,33 @@ export function QuoteTracker() {
 interface QuoteRowProps {
   quote: QuoteComparison;
   formatCurrency: (amount: number | null) => string;
+  onRowClick: () => void;
 }
 
-function QuoteRow({ quote, formatCurrency }: QuoteRowProps) {
+function QuoteRow({ quote, formatCurrency, onRowClick }: QuoteRowProps) {
+  const { user } = useAuth();
+  const updateQuote = useUpdateQuoteWithLog();
+
+  const handleStatusCycle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user) return;
+
+    const currentIndex = QUOTE_STATUS_ORDER.indexOf(quote.status);
+    const nextIndex = (currentIndex + 1) % QUOTE_STATUS_ORDER.length;
+    const nextStatus = QUOTE_STATUS_ORDER[nextIndex];
+
+    updateQuote.mutate({
+      id: quote.id,
+      userId: user.id,
+      updates: { status: nextStatus },
+    });
+  };
+
   return (
-    <div className="px-4 py-3 hover:bg-gray-50">
+    <div
+      className="px-4 py-3 hover:bg-gray-50 cursor-pointer"
+      onClick={onRowClick}
+    >
       <div className="flex items-center justify-between gap-4">
         {/* Vendor info */}
         <div className="flex-1 min-w-0">
@@ -131,16 +175,16 @@ function QuoteRow({ quote, formatCurrency }: QuoteRowProps) {
           )}
         </div>
 
-        {/* Status */}
-        <div>
-          <span
-            className={`text-xs px-2 py-1 rounded whitespace-nowrap ${
-              QUOTE_STATUS_CONFIG[quote.status]?.color || 'text-gray-600 bg-gray-100'
-            }`}
-          >
-            {QUOTE_STATUS_CONFIG[quote.status]?.label || quote.status}
-          </span>
-        </div>
+        {/* Status - Tappable to cycle */}
+        <button
+          onClick={handleStatusCycle}
+          className={`text-xs px-2 py-1 rounded whitespace-nowrap transition-colors hover:opacity-80 ${
+            QUOTE_STATUS_CONFIG[quote.status]?.color || 'text-gray-600 bg-gray-100'
+          }`}
+          title="Tap to change status"
+        >
+          {QUOTE_STATUS_CONFIG[quote.status]?.label || quote.status}
+        </button>
       </div>
     </div>
   );
