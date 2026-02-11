@@ -324,6 +324,26 @@ export function useReorderBudgetAreas() {
   });
 }
 
+// Delete a project
+export function useDeleteProject() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (projectId: string) => {
+      const { error } = await supabase
+        .from('projects')
+        .delete()
+        .eq('id', projectId);
+
+      if (error) throw error;
+      return projectId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
+  });
+}
+
 // Project activity log - changes to RFIs, quotes, and project itself
 export function useProjectActivity(projectId: string | undefined) {
   return useQuery({

@@ -45,6 +45,7 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
   const [localFollowUpDate, setLocalFollowUpDate] = useState(task.next_action_date || '');
   const [localLatestUpdate, setLocalLatestUpdate] = useState(task.latest_update || '');
   const [localStallReason, setLocalStallReason] = useState(task.stall_reason || '');
+  const [localScope, setLocalScope] = useState(task.scope || '');
 
   // Track unsaved changes and save status
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -184,6 +185,10 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
       updates.stall_reason = localStallReason || null;
     }
 
+    if (localScope !== (task.scope || '')) {
+      updates.scope = localScope || null;
+    }
+
     try {
       await updateRFI.mutateAsync(updates as { id: string });
       setHasUnsavedChanges(false);
@@ -270,9 +275,19 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
           </button>
         </div>
 
-        {/* Row 2: Scope (if present) */}
-        {task.scope && (
-          <p className="text-xs text-text-secondary mb-2 line-clamp-2">{task.scope}</p>
+        {/* Row 2: Scope (if present) - truncated in collapsed view */}
+        {task.scope && !expanded && (
+          <div className="mb-2">
+            <p className="text-xs text-text-secondary line-clamp-2">{task.scope}</p>
+            {task.scope.length > 100 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
+                className="text-xs text-primary-600 hover:text-primary-700 mt-1"
+              >
+                Read more...
+              </button>
+            )}
+          </div>
         )}
 
         {/* Row 3: Blocking impact (if blocking) */}
@@ -467,6 +482,21 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
               </button>
             </div>
 
+            {/* Scope of Work - large text area */}
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1">Scope of Work</label>
+              <textarea
+                value={localScope}
+                onChange={(e) => {
+                  setLocalScope(e.target.value);
+                  handleLocalChange();
+                }}
+                placeholder="Describe the full scope of work..."
+                rows={5}
+                className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y min-h-[100px]"
+              />
+            </div>
+
             {/* Follow-up date */}
             <div>
               <label className="block text-xs font-medium text-text-secondary mb-1">Follow-up Date</label>
@@ -491,8 +521,8 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
                   handleLocalChange();
                 }}
                 placeholder="Add a note about latest activity..."
-                rows={2}
-                className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+                rows={7}
+                className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y min-h-[140px]"
               />
             </div>
 
