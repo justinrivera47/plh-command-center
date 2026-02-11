@@ -5,7 +5,7 @@ import { ProjectCard } from './ProjectCard';
 import { EmptyState } from '../shared/EmptyState';
 import { SkeletonList } from '../shared/SkeletonCard';
 import { useUIStore } from '../../stores/uiStore';
-import type { ProjectStatus, Project } from '../../lib/types';
+import type { ProjectStatus } from '../../lib/types';
 
 const FILTER_TABS: { value: ProjectStatus | 'all'; label: string }[] = [
   { value: 'all', label: 'All' },
