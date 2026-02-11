@@ -221,6 +221,32 @@ export interface ChangeLog {
 }
 
 // ============================================
+// Call Logs
+// ============================================
+
+export type CallOutcome = 'waiting_on_them' | 'i_need_to_do' | 'done' | 'follow_up_by';
+
+export interface CallLog {
+  id: string;
+  user_id: string;
+  project_id: string | null;
+  contact_name: string;
+  contact_type: string | null;
+  phone_number: string | null;
+  note: string;
+  outcome: CallOutcome;
+  follow_up_date: string | null;
+  follow_up_rfi_id: string | null;
+  duration_minutes: number | null;
+  created_at: string;
+}
+
+export interface CallLogView extends CallLog {
+  project_name: string | null;
+  follow_up_task: string | null;
+}
+
+// ============================================
 // User Profile
 // ============================================
 

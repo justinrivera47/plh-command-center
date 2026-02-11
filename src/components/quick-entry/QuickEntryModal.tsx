@@ -7,6 +7,7 @@ import { useActiveProjects, useCreateProject } from '../../hooks/useProjects';
 import { useOpenRFIs, useCreateRFI, useUpdateRFIStatus } from '../../hooks/useRFIs';
 import { useCreateQuote } from '../../hooks/useQuotes';
 import { useVendors, useTradeCategories, useCreateVendor } from '../../hooks/useVendors';
+import { useCreateCallLog, useUpdateCallLogRFI } from '../../hooks/useCallLogs';
 import { useAuth } from '../../hooks/useAuth';
 import {
   logQuoteSchema,
@@ -626,8 +627,11 @@ function NewRFIForm() {
 function CallLogForm() {
   const { user } = useAuth();
   const { data: projects } = useActiveProjects();
+  const createCallLog = useCreateCallLog();
+  const updateCallLogRFI = useUpdateCallLogRFI();
   const createRFI = useCreateRFI();
   const closeQuickEntry = useUIStore((state) => state.closeQuickEntry);
+  const selectedProjectId = useUIStore((state) => state.selectedProjectId);
 
   const {
     register,
@@ -636,6 +640,9 @@ function CallLogForm() {
     watch,
   } = useForm<CallLogFormData>({
     resolver: zodResolver(callLogSchema),
+    defaultValues: {
+      project_id: selectedProjectId || '',
+    },
   });
 
   const nextStep = watch('next_step');
@@ -643,9 +650,23 @@ function CallLogForm() {
   const onSubmit = async (data: CallLogFormData) => {
     if (!user) return;
 
-    // Create an RFI to track the follow-up if needed
+    // First, create the call log record
+    const callLog = await createCallLog.mutateAsync({
+      user_id: user.id,
+      project_id: data.project_id || null,
+      contact_name: data.contact_name,
+      contact_type: null, // Could add a field for this in the future
+      phone_number: null,
+      note: data.note,
+      outcome: data.next_step,
+      follow_up_date: data.follow_up_date || null,
+      follow_up_rfi_id: null,
+      duration_minutes: null,
+    });
+
+    // If a follow-up is needed, create an RFI and link it
     if (data.next_step !== 'done') {
-      await createRFI.mutateAsync({
+      const rfi = await createRFI.mutateAsync({
         user_id: user.id,
         project_id: data.project_id || null as any,
         task: `Follow up with ${data.contact_name}`,
@@ -670,6 +691,12 @@ function CallLogForm() {
         milestone: null,
         deliverable: null,
         notes: null,
+      });
+
+      // Link the RFI back to the call log
+      await updateCallLogRFI.mutateAsync({
+        id: callLog.id,
+        follow_up_rfi_id: rfi.id,
       });
     }
 

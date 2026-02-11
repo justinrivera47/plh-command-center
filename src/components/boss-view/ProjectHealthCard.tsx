@@ -1,7 +1,8 @@
-import type { Project, WarRoomItem, QuoteComparison } from '../../lib/types';
+import type { Project, WarRoomItem, QuoteComparison, CallLogView } from '../../lib/types';
 import type { DecisionNeeded } from '../../hooks/useDecisionsNeeded';
 import type { ActivityEntry } from '../../hooks/useRecentActivity';
 import type { ProjectBudgetTotals } from '../../hooks/useBudgetLineItems';
+import { formatOutcome, getOutcomeColor } from '../../hooks/useCallLogs';
 
 interface ProjectHealthCardProps {
   project: Project;
@@ -10,6 +11,7 @@ interface ProjectHealthCardProps {
   recentActivity?: ActivityEntry[];
   decisionsNeeded?: DecisionNeeded[];
   budgetTotals?: ProjectBudgetTotals;
+  callLogs?: CallLogView[];
   expanded: boolean;
   onToggle: () => void;
 }
@@ -21,6 +23,7 @@ export function ProjectHealthCard({
   recentActivity = [],
   decisionsNeeded = [],
   budgetTotals,
+  callLogs = [],
   expanded,
   onToggle,
 }: ProjectHealthCardProps) {
@@ -403,6 +406,36 @@ export function ProjectHealthCard({
             </div>
           )}
 
+          {/* Recent Calls */}
+          {callLogs.length > 0 && (
+            <div className="mb-4">
+              <h4 className="text-sm font-medium text-text-secondary mb-2">
+                Recent Calls ({callLogs.length})
+              </h4>
+              <div className="space-y-2 bg-white rounded border border-border p-2">
+                {callLogs.slice(0, 3).map((log) => (
+                  <div key={log.id} className="text-xs p-2 bg-gray-50 rounded">
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="font-medium text-text-primary">{log.contact_name}</span>
+                      <span className={`px-1.5 py-0.5 rounded text-xs ${getOutcomeColor(log.outcome)}`}>
+                        {formatOutcome(log.outcome)}
+                      </span>
+                    </div>
+                    <p className="text-text-secondary line-clamp-2">{log.note}</p>
+                    <div className="flex justify-between items-center mt-1 text-text-secondary">
+                      <span>{formatRelativeTime(log.created_at)}</span>
+                      {log.follow_up_date && (
+                        <span className="text-amber-600">
+                          Follow up: {new Date(log.follow_up_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Recent Activity - full list */}
           {recentActivity.length > 0 && (
             <div>
@@ -446,4 +479,21 @@ function formatCurrency(amount: number): string {
     currency: 'USD',
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+function formatRelativeTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) {
+    return 'Today';
+  } else if (diffDays === 1) {
+    return 'Yesterday';
+  } else if (diffDays < 7) {
+    return `${diffDays} days ago`;
+  } else {
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
 }

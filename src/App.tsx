@@ -24,6 +24,7 @@ import { ProjectDetail } from './components/projects/ProjectDetail';
 import { QuoteTracker } from './components/quotes/QuoteTracker';
 import { VendorList } from './components/vendors/VendorList';
 import { VendorDetail } from './components/vendors/VendorDetail';
+import { CallLogList } from './components/call-logs/CallLogList';
 import { BossView } from './components/boss-view/BossView';
 import { BudgetDashboard } from './components/budget-dashboard/BudgetDashboard';
 import { SettingsPage } from './components/settings/SettingsPage';
@@ -143,6 +144,7 @@ function App() {
               <Route path="budget" element={<BudgetDashboard />} />
               <Route path="vendors" element={<VendorList />} />
               <Route path="vendors/:vendorId" element={<VendorDetail />} />
+              <Route path="call-log" element={<CallLogList />} />
               <Route path="boss-view" element={<BossView />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>

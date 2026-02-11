@@ -8,6 +8,7 @@ const navItems = [
   { to: '/quotes', label: 'Quotes', icon: '💰' },
   { to: '/budget', label: 'Budget', icon: '📊' },
   { to: '/vendors', label: 'Vendors', icon: '🏢' },
+  { to: '/call-log', label: 'Call Log', icon: '📞' },
 ];
 
 const bottomItems = [

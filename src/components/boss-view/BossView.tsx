@@ -6,6 +6,7 @@ import { useQuotes } from '../../hooks/useQuotes';
 import { useDecisionsNeeded } from '../../hooks/useDecisionsNeeded';
 import { useRecentActivityByProject } from '../../hooks/useRecentActivity';
 import { useBudgetTotalsByProject } from '../../hooks/useBudgetLineItems';
+import { useCallLogsByProject } from '../../hooks/useCallLogs';
 import { ProjectHealthCard } from './ProjectHealthCard';
 import { ExportButton } from './ExportButton';
 import { SkeletonList } from '../shared/SkeletonCard';
@@ -19,6 +20,7 @@ export function BossView() {
   const { data: decisionsNeeded } = useDecisionsNeeded();
   const { data: activityByProject } = useRecentActivityByProject(5);
   const { data: budgetTotalsByProject } = useBudgetTotalsByProject();
+  const { data: callLogsByProject } = useCallLogsByProject();
   const [expandedProject, setExpandedProject] = useState<string | null>(null);
 
   // Invalidate queries on mount to ensure fresh data for executive view
@@ -29,6 +31,7 @@ export function BossView() {
     queryClient.invalidateQueries({ queryKey: ['decisions-needed'] });
     queryClient.invalidateQueries({ queryKey: ['recent-activity-by-project'] });
     queryClient.invalidateQueries({ queryKey: ['budget-totals-by-project'] });
+    queryClient.invalidateQueries({ queryKey: ['call-logs'] });
   }, [queryClient]);
 
   const isLoading = projectsLoading || tasksLoading || quotesLoading;
@@ -183,6 +186,7 @@ export function BossView() {
               recentActivity={activityByProject?.[project.id] || []}
               decisionsNeeded={decisionsNeeded || []}
               budgetTotals={projectBudgetTotals}
+              callLogs={callLogsByProject?.[project.id] || []}
               expanded={expandedProject === project.id}
               onToggle={() => setExpandedProject(
                 expandedProject === project.id ? null : project.id
