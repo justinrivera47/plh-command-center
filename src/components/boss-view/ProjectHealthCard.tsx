@@ -33,7 +33,6 @@ export function ProjectHealthCard({
   // Budget metrics from line items (real-time)
   const totalBudgeted = budgetTotals?.totalBudgeted || 0;
   const totalActual = budgetTotals?.totalActual || 0;
-  const budgetVariance = totalActual - totalBudgeted;
   const budgetUtilization = totalBudgeted > 0 ? (totalActual / totalBudgeted) * 100 : 0;
 
   // Quote breakdown (for display purposes)
@@ -49,6 +48,81 @@ export function ProjectHealthCard({
 
   // Project-specific decisions
   const projectDecisions = decisionsNeeded.filter((d) => d.projectId === project.id);
+
+  // Build quote pipeline by trade
+  const getQuotePipelineByTrade = () => {
+    const tradeMap = new Map<string, {
+      tradeName: string;
+      budgetAmount: number | null;
+      quotes: QuoteComparison[];
+      awardedQuote: QuoteComparison | null;
+    }>();
+
+    quotes.forEach((quote) => {
+      const tradeName = quote.trade_name || 'Other';
+      if (!tradeMap.has(tradeName)) {
+        tradeMap.set(tradeName, {
+          tradeName,
+          budgetAmount: quote.budget_amount,
+          quotes: [],
+          awardedQuote: null,
+        });
+      }
+      const trade = tradeMap.get(tradeName)!;
+      trade.quotes.push(quote);
+
+      // Check if this quote is awarded
+      if (['approved', 'signed', 'contract_sent', 'in_progress', 'completed'].includes(quote.status)) {
+        trade.awardedQuote = quote;
+      }
+    });
+
+    return Array.from(tradeMap.values()).map((trade) => {
+      const nonDeclinedQuotes = trade.quotes.filter(q => q.status !== 'declined' && q.quoted_price);
+      const quotedQuotes = trade.quotes.filter(q => q.quoted_price !== null);
+
+      // Find best (lowest) quote
+      const bestQuoteObj = nonDeclinedQuotes.reduce<QuoteComparison | null>((best, q) => {
+        if (!q.quoted_price) return best;
+        if (!best || !best.quoted_price) return q;
+        return q.quoted_price < best.quoted_price ? q : best;
+      }, null);
+
+      const bestQuote = bestQuoteObj?.quoted_price || null;
+      const bestVendor = bestQuoteObj?.vendor_name || null;
+      const isOverBudget = trade.budgetAmount && bestQuote ? bestQuote > trade.budgetAmount : false;
+
+      // Determine status
+      let status: 'awarded' | 'pending' | 'over_budget' | 'waiting';
+      let statusLabel: string;
+
+      if (trade.awardedQuote) {
+        status = 'awarded';
+        statusLabel = 'Awarded';
+      } else if (isOverBudget) {
+        status = 'over_budget';
+        statusLabel = 'Over Budget';
+      } else if (quotedQuotes.length > 0) {
+        status = 'pending';
+        statusLabel = 'Pending';
+      } else {
+        status = 'waiting';
+        statusLabel = 'Waiting';
+      }
+
+      return {
+        tradeName: trade.tradeName,
+        budgetAmount: trade.budgetAmount,
+        bestQuote,
+        bestVendor,
+        isOverBudget,
+        quotedCount: quotedQuotes.length,
+        totalVendors: trade.quotes.length,
+        status,
+        statusLabel,
+      };
+    });
+  };
 
   // Determine overall health status
   const getHealthStatus = (): { status: 'good' | 'warning' | 'critical'; label: string } => {
@@ -182,54 +256,138 @@ export function ProjectHealthCard({
             <MiniStat label="On Me" value={waitingOnMe} color={waitingOnMe > 0 ? 'text-amber-600' : undefined} />
           </div>
 
-          {/* Enhanced Budget Section - from line items */}
-          {totalBudgeted > 0 && (
+          {/* Enhanced Budget Section - Committed / Projected / Budget */}
+          {(totalBudgeted > 0 || project.total_budget) && (
             <div className="mb-4">
-              <div className="flex justify-between text-sm mb-1">
-                <span className="text-text-secondary">Budget vs Actual</span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-sm mb-2">
-                <div>
-                  <span className="text-text-secondary">Budgeted: </span>
-                  <span className="font-medium">{formatCurrency(totalBudgeted)}</span>
-                </div>
-                <div>
-                  <span className="text-text-secondary">Actual: </span>
-                  <span className="font-medium">{formatCurrency(totalActual)}</span>
-                </div>
-                <div>
-                  <span className="text-text-secondary">Variance: </span>
-                  <span className={`font-medium ${budgetVariance > 0 ? 'text-red-600' : budgetVariance < 0 ? 'text-green-600' : ''}`}>
-                    {budgetVariance > 0 ? '+' : ''}{formatCurrency(budgetVariance)}
-                  </span>
-                </div>
-              </div>
-              {/* Progress bar */}
-              <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
-                <div
-                  className={`h-full ${budgetUtilization > 100 ? 'bg-red-500' : 'bg-green-500'}`}
-                  style={{ width: `${Math.min(budgetUtilization, 100)}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-xs text-text-secondary mt-1">
-                <span>{formatCurrency(totalBudgeted)} budgeted</span>
-                <span className={budgetUtilization > 100 ? 'text-red-600 font-medium' : ''}>
-                  {budgetUtilization.toFixed(0)}% spent
-                </span>
-              </div>
+              <h4 className="text-sm font-medium text-text-secondary mb-2">Budget Progress</h4>
+              {(() => {
+                // Calculate committed (awarded vendor prices)
+                const committed = approvedQuotes.reduce((sum, q) => sum + (q.quoted_price || 0), 0);
+
+                // Calculate projected (committed + best quotes on non-awarded trades)
+                const pipeline = getQuotePipelineByTrade();
+                const projectedFromPending = pipeline
+                  .filter(t => t.status !== 'awarded' && t.bestQuote)
+                  .reduce((sum, t) => sum + (t.bestQuote || 0), 0);
+                const projected = committed + projectedFromPending;
+
+                // Use project total budget or sum of line item budgets
+                const budget = project.total_budget || totalBudgeted;
+
+                const committedPercent = budget > 0 ? (committed / budget) * 100 : 0;
+                const projectedPercent = budget > 0 ? (projected / budget) * 100 : 0;
+
+                return (
+                  <>
+                    <div className="grid grid-cols-3 gap-2 text-sm mb-2">
+                      <div>
+                        <span className="text-text-secondary">Committed: </span>
+                        <span className="font-medium text-green-600">{formatCurrency(committed)}</span>
+                      </div>
+                      <div>
+                        <span className="text-text-secondary">Projected: </span>
+                        <span className="font-medium text-amber-600">{formatCurrency(projected)}</span>
+                      </div>
+                      <div>
+                        <span className="text-text-secondary">Budget: </span>
+                        <span className="font-medium">{formatCurrency(budget)}</span>
+                      </div>
+                    </div>
+                    {/* Stacked progress bar */}
+                    <div className="h-4 bg-gray-200 rounded-full overflow-hidden flex">
+                      {/* Committed (green) */}
+                      <div
+                        className="h-full bg-green-500 transition-all"
+                        style={{ width: `${Math.min(committedPercent, 100)}%` }}
+                      />
+                      {/* Projected additional (amber) */}
+                      <div
+                        className={`h-full transition-all ${projectedPercent > 100 ? 'bg-red-400' : 'bg-amber-400'}`}
+                        style={{ width: `${Math.min(Math.max(projectedPercent - committedPercent, 0), 100 - Math.min(committedPercent, 100))}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-xs text-text-secondary mt-1">
+                      <div className="flex items-center gap-3">
+                        <span className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                          Committed {committedPercent.toFixed(0)}%
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                          Projected {projectedPercent.toFixed(0)}%
+                        </span>
+                      </div>
+                      {projectedPercent > 100 && (
+                        <span className="text-red-600 font-medium">
+                          {formatCurrency(projected - budget)} over
+                        </span>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           )}
 
-          {/* Enhanced Quotes Summary */}
+          {/* Quote Pipeline Summary - Per Trade */}
           {quotes.length > 0 && (
             <div className="mb-4">
               <h4 className="text-sm font-medium text-text-secondary mb-2">
-                Quotes ({quotes.length})
+                Quote Pipeline
               </h4>
-              <div className="grid grid-cols-3 gap-2 text-sm">
+              <div className="bg-white rounded border border-border overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 border-b border-border">
+                    <tr>
+                      <th className="text-left px-2 py-1.5 font-medium text-text-secondary">Trade</th>
+                      <th className="text-right px-2 py-1.5 font-medium text-text-secondary">Budget</th>
+                      <th className="text-right px-2 py-1.5 font-medium text-text-secondary">Best Quote</th>
+                      <th className="text-center px-2 py-1.5 font-medium text-text-secondary">Quotes</th>
+                      <th className="text-center px-2 py-1.5 font-medium text-text-secondary">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {getQuotePipelineByTrade().map((trade) => (
+                      <tr key={trade.tradeName} className="hover:bg-gray-50">
+                        <td className="px-2 py-1.5 text-text-primary">{trade.tradeName}</td>
+                        <td className="px-2 py-1.5 text-right text-text-secondary">
+                          {trade.budgetAmount ? formatCurrency(trade.budgetAmount) : '—'}
+                        </td>
+                        <td className={`px-2 py-1.5 text-right font-medium ${
+                          trade.isOverBudget ? 'text-red-600' : trade.bestQuote ? 'text-text-primary' : 'text-text-secondary'
+                        }`}>
+                          {trade.bestQuote ? formatCurrency(trade.bestQuote) : 'No quotes'}
+                          {trade.bestVendor && (
+                            <span className="block text-text-secondary font-normal">({trade.bestVendor})</span>
+                          )}
+                        </td>
+                        <td className="px-2 py-1.5 text-center text-text-secondary">
+                          {trade.quotedCount}/{trade.totalVendors}
+                        </td>
+                        <td className="px-2 py-1.5 text-center">
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs ${
+                            trade.status === 'awarded' ? 'bg-green-100 text-green-700' :
+                            trade.status === 'over_budget' ? 'bg-red-100 text-red-700' :
+                            trade.status === 'pending' ? 'bg-amber-100 text-amber-700' :
+                            'bg-gray-100 text-gray-600'
+                          }`}>
+                            {trade.status === 'awarded' && '✅'}
+                            {trade.status === 'over_budget' && '🔴'}
+                            {trade.status === 'pending' && '⏳'}
+                            {trade.status === 'waiting' && '⚠️'}
+                            {trade.statusLabel}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {/* Quick stats row */}
+              <div className="grid grid-cols-3 gap-2 text-sm mt-2">
                 <div className="bg-white rounded p-2 border border-border text-center">
                   <div className="font-semibold text-green-600">{approvedQuotes.length}</div>
-                  <div className="text-xs text-text-secondary">Approved</div>
+                  <div className="text-xs text-text-secondary">Awarded</div>
                 </div>
                 <div className="bg-white rounded p-2 border border-border text-center">
                   <div className="font-semibold text-amber-600">{pendingQuotes.length}</div>

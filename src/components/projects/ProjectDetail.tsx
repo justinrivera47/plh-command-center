@@ -299,6 +299,7 @@ export function ProjectDetail() {
       item_name: name,
       budgeted_amount: null,
       actual_amount: null,
+      awarded_quote_id: null,
       sort_order: areaItems.length + 1,
       notes: null,
       userId: user.id,

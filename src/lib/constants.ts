@@ -9,6 +9,7 @@ export const RFI_STATUS_CONFIG: Record<RFIStatus, { label: string; icon: string;
   waiting_on_client: { label: 'Client', icon: '👤', color: 'text-blue-600 bg-blue-100' },
   waiting_on_vendor: { label: 'Vendor', icon: '📦', color: 'text-purple-600 bg-purple-100' },
   waiting_on_contractor: { label: 'Contractor', icon: '🔨', color: 'text-orange-600 bg-orange-100' },
+  waiting_on_design_team: { label: 'Design Team', icon: '🎨', color: 'text-pink-600 bg-pink-100' },
   waiting_on_me: { label: 'On Me', icon: '⚡', color: 'text-amber-600 bg-amber-100' },
   follow_up: { label: 'Follow Up', icon: '🔥', color: 'text-red-600 bg-red-100' },
   completed: { label: 'Done', icon: '✓', color: 'text-green-600 bg-green-100' },

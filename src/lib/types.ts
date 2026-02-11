@@ -11,6 +11,7 @@ export type RFIStatus =
   | 'waiting_on_client'
   | 'waiting_on_vendor'
   | 'waiting_on_contractor'
+  | 'waiting_on_design_team'
   | 'waiting_on_me'
   | 'follow_up'
   | 'completed'
@@ -148,6 +149,7 @@ export interface Quote {
   project_id: string;
   trade_category_id: string | null;
   vendor_id: string | null;
+  budget_line_item_id: string | null;
   plan_provided_date: string | null;
   scope_provided_date: string | null;
   quote_received_date: string | null;
@@ -180,6 +182,7 @@ export interface BudgetLineItem {
   item_name: string;
   budgeted_amount: number | null;
   actual_amount: number | null;
+  awarded_quote_id: string | null;
   sort_order: number;
   notes: string | null;
   created_at: string;
@@ -248,6 +251,13 @@ export interface QuoteComparison extends Quote {
   project_name: string;
   trade_name: string | null;
   vendor_name: string | null;
+  vendor_poc: string | null;
+  vendor_phone: string | null;
+  vendor_email: string | null;
+  budget_item_name: string | null;
+  budget_item_budgeted: number | null;
+  budget_item_actual: number | null;
+  awarded_quote_id: string | null;
   budget_variance: number | null;
   budget_variance_percent: number | null;
 }

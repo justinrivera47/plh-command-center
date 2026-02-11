@@ -88,6 +88,7 @@ const rfiStatusValues = [
   'waiting_on_client',
   'waiting_on_vendor',
   'waiting_on_contractor',
+  'waiting_on_design_team',
   'waiting_on_me',
   'follow_up',
   'completed',

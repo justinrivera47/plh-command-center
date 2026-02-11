@@ -138,6 +138,7 @@ function LogQuoteForm() {
       project_id: data.project_id,
       trade_category_id: data.trade_category_id,
       vendor_id: data.vendor_id || null,
+      budget_line_item_id: null,
       quoted_price: data.quoted_price,
       notes: data.notes || null,
       status: 'quoted',

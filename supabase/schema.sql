@@ -286,7 +286,7 @@ SELECT
     THEN TRUE
     WHEN r.last_contacted_at IS NOT NULL
       AND r.last_contacted_at + (r.follow_up_days || ' days')::INTERVAL < NOW()
-      AND r.status IN ('waiting_on_client', 'waiting_on_vendor', 'waiting_on_contractor')
+      AND r.status IN ('waiting_on_client', 'waiting_on_vendor', 'waiting_on_contractor', 'waiting_on_design_team')
     THEN TRUE
     ELSE FALSE
   END AS is_overdue,
