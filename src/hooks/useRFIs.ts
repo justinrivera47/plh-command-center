@@ -261,3 +261,25 @@ export function useProjectRFICounts(projectId: string) {
     enabled: !!projectId,
   });
 }
+
+// Delete an RFI
+export function useDeleteRFI() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (rfiId: string) => {
+      const { error } = await supabase
+        .from('rfis')
+        .delete()
+        .eq('id', rfiId);
+
+      if (error) throw error;
+      return rfiId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rfis'] });
+      queryClient.invalidateQueries({ queryKey: ['war-room'] });
+      queryClient.invalidateQueries({ queryKey: ['project-activity'] });
+    },
+  });
+}

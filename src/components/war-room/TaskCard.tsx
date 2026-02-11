@@ -6,7 +6,8 @@ import { BlockingBadge } from '../shared/BlockingBadge';
 import { BlockedByBanner } from '../shared/BlockedByBanner';
 import { DaysCounter } from '../shared/DaysCounter';
 import { useUIStore } from '../../stores/uiStore';
-import { useUpdateRFI, useUpdateRFIStatus } from '../../hooks/useRFIs';
+import { useUpdateRFI, useUpdateRFIStatus, useDeleteRFI } from '../../hooks/useRFIs';
+import { toast } from 'sonner';
 import { RFI_STATUS_CONFIG, STALL_PROMPTS, getPOCTypeFromStatus, isAssignedStatus } from '../../lib/constants';
 
 interface TaskCardProps {
@@ -38,6 +39,7 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [editingField, setEditingField] = useState<string | null>(null);
   const [showSnoozeOptions, setShowSnoozeOptions] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Local state for editable fields
   const [localFollowUpDate, setLocalFollowUpDate] = useState(task.next_action_date || '');
@@ -52,6 +54,7 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
   const openQuickEntry = useUIStore((state) => state.openQuickEntry);
   const updateRFI = useUpdateRFI();
   const updateRFIStatus = useUpdateRFIStatus();
+  const deleteRFI = useDeleteRFI();
 
   // Update hasUnsavedChanges whenever local values change
   const handleLocalChange = () => {
@@ -217,6 +220,16 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
     e.stopPropagation();
     // Set the selected project context for quick entry
     openQuickEntry('call');
+  };
+
+  const handleDelete = async () => {
+    try {
+      await deleteRFI.mutateAsync(task.id);
+      toast.success('Task deleted');
+      setShowDeleteConfirm(false);
+    } catch (error) {
+      toast.error('Failed to delete task');
+    }
   };
 
   return (
@@ -546,6 +559,39 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
                   'No Changes'
                 )}
               </button>
+            </div>
+
+            {/* Delete Task */}
+            <div className="pt-3 mt-3 border-t border-border">
+              {!showDeleteConfirm ? (
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="w-full py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                  Delete Task
+                </button>
+              ) : (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-800 mb-3">
+                    Are you sure you want to delete this task? This cannot be undone.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowDeleteConfirm(false)}
+                      className="flex-1 py-2 text-sm font-medium border border-border rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleDelete}
+                      disabled={deleteRFI.isPending}
+                      className="flex-1 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+                    >
+                      {deleteRFI.isPending ? 'Deleting...' : 'Delete'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

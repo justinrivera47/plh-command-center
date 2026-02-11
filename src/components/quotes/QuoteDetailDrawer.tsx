@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useForm } from 'react-hook-form';
-import { useQuote, useUpdateQuoteWithLog, useQuoteHistory } from '../../hooks/useQuotes';
+import { useQuote, useUpdateQuoteWithLog, useQuoteHistory, useDeleteQuote } from '../../hooks/useQuotes';
+import { toast } from 'sonner';
 import { useVendor } from '../../hooks/useVendors';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuth } from '../../hooks/useAuth';
@@ -42,8 +43,10 @@ export function QuoteDetailDrawer() {
   const { data: vendor } = useVendor(quote?.vendor_id || undefined);
   const { data: history } = useQuoteHistory(quoteDrawerId || undefined);
   const updateQuote = useUpdateQuoteWithLog();
+  const deleteQuote = useDeleteQuote();
 
   const [saving, setSaving] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const {
     register,
@@ -179,6 +182,17 @@ export function QuoteDetailDrawer() {
         pocType: 'vendor',
         templateCategory: 'quote_follow_up',
       });
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!quoteDrawerId) return;
+    try {
+      await deleteQuote.mutateAsync(quoteDrawerId);
+      toast.success('Quote deleted');
+      closeQuoteDrawer();
+    } catch (error) {
+      toast.error('Failed to delete quote');
     }
   };
 
@@ -460,8 +474,8 @@ export function QuoteDetailDrawer() {
                 )}
               </div>
 
-              {/* Footer with save button */}
-              <div className="sticky bottom-0 bg-white border-t border-border px-4 py-4">
+              {/* Footer with save and delete buttons */}
+              <div className="sticky bottom-0 bg-white border-t border-border px-4 py-4 space-y-3">
                 <button
                   type="submit"
                   disabled={saving}
@@ -469,6 +483,40 @@ export function QuoteDetailDrawer() {
                 >
                   {saving ? 'Saving...' : 'Save Changes'}
                 </button>
+
+                {/* Delete button */}
+                {!showDeleteConfirm ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="w-full py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    Delete Quote
+                  </button>
+                ) : (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-sm text-red-800 mb-3">
+                      Are you sure you want to delete this quote? This cannot be undone.
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowDeleteConfirm(false)}
+                        className="flex-1 py-2 text-sm font-medium border border-border rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDelete}
+                        disabled={deleteQuote.isPending}
+                        className="flex-1 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+                      >
+                        {deleteQuote.isPending ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </form>
           ) : (

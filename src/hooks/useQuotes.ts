@@ -213,3 +213,24 @@ export function useQuotesByTrade(projectId?: string) {
     ...rest,
   };
 }
+
+// Delete a quote
+export function useDeleteQuote() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (quoteId: string) => {
+      const { error } = await supabase
+        .from('quotes')
+        .delete()
+        .eq('id', quoteId);
+
+      if (error) throw error;
+      return quoteId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quotes'] });
+      queryClient.invalidateQueries({ queryKey: ['project-activity'] });
+    },
+  });
+}
