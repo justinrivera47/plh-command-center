@@ -55,14 +55,39 @@ export function useCSVImport() {
   const [progress, setProgress] = useState(0);
 
   // Parse a CSV file and return headers + rows
-  const parseFile = useCallback(async (file: File): Promise<ParsedCSV> => {
+  // skipRows: number of rows to skip before the header row (for files with description rows at top)
+  const parseFile = useCallback(async (file: File, skipRows: number = 0): Promise<ParsedCSV> => {
     return new Promise((resolve, reject) => {
       Papa.parse(file, {
-        header: true,
+        header: false, // We'll handle headers manually to support skipping rows
         skipEmptyLines: true,
         complete: (results) => {
-          const headers = results.meta.fields || [];
-          const rows = results.data as Record<string, string>[];
+          const allRows = results.data as string[][];
+
+          if (allRows.length <= skipRows) {
+            reject(new Error('Not enough rows after skipping'));
+            return;
+          }
+
+          // Get headers from the row after skipped rows
+          const headers = allRows[skipRows].map((h, idx) =>
+            h?.toString().trim() || `Column ${idx + 1}`
+          );
+
+          // Convert remaining rows to objects
+          const rows: Record<string, string>[] = [];
+          for (let i = skipRows + 1; i < allRows.length; i++) {
+            const row = allRows[i];
+            // Skip if row is empty or has no values
+            if (!row || row.every(cell => !cell || !cell.toString().trim())) continue;
+
+            const obj: Record<string, string> = {};
+            headers.forEach((header, idx) => {
+              obj[header] = row[idx]?.toString().trim() || '';
+            });
+            rows.push(obj);
+          }
+
           resolve({ headers, rows });
         },
         error: (error) => {

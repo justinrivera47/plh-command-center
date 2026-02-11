@@ -28,6 +28,8 @@ export function ImportModal({ open, onClose }: ImportModalProps) {
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [fileName, setFileName] = useState<string>('');
+  const [skipRows, setSkipRows] = useState<number>(0);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { parseFile, applyMapping, validateData, importData, progress } = useCSVImport();
@@ -42,6 +44,8 @@ export function ImportModal({ open, onClose }: ImportModalProps) {
     setValidationErrors([]);
     setImportResult(null);
     setFileName('');
+    setSkipRows(0);
+    setPendingFile(null);
   }, []);
 
   const handleClose = () => {
@@ -54,10 +58,12 @@ export function ImportModal({ open, onClose }: ImportModalProps) {
     setStep('upload');
   };
 
-  const handleFileSelect = async (file: File) => {
+  const handleFileSelect = async (file: File, rowsToSkip: number = 0) => {
     try {
       setFileName(file.name);
-      const { headers, rows } = await parseFile(file);
+      setPendingFile(file);
+      setSkipRows(rowsToSkip);
+      const { headers, rows } = await parseFile(file, rowsToSkip);
       setCsvHeaders(headers);
       setCsvRows(rows);
 
@@ -68,6 +74,25 @@ export function ImportModal({ open, onClose }: ImportModalProps) {
       }
 
       setStep('map_columns');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to parse file');
+    }
+  };
+
+  const handleSkipRowsChange = async (newSkipRows: number) => {
+    if (!pendingFile) return;
+    setSkipRows(newSkipRows);
+
+    try {
+      const { headers, rows } = await parseFile(pendingFile, newSkipRows);
+      setCsvHeaders(headers);
+      setCsvRows(rows);
+
+      // Re-run auto-detect with new headers
+      if (importType) {
+        const autoMapping = autoDetectMapping(headers, importType);
+        setColumnMapping(autoMapping);
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to parse file');
     }
@@ -288,6 +313,31 @@ export function ImportModal({ open, onClose }: ImportModalProps) {
                   <span className="text-sm text-text-secondary">
                     {fileName} ({csvRows.length} rows)
                   </span>
+                </div>
+
+                {/* Skip rows option */}
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <label className="text-sm text-blue-800 font-medium whitespace-nowrap">
+                      Skip rows before header:
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="10"
+                      value={skipRows}
+                      onChange={(e) => handleSkipRowsChange(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="w-16 px-2 py-1 border border-blue-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <span className="text-xs text-blue-600">
+                      (Use if your CSV has title/description rows before the column headers)
+                    </span>
+                  </div>
+                  {csvHeaders.length > 0 && (
+                    <div className="mt-2 text-xs text-blue-700">
+                      Detected columns: {csvHeaders.slice(0, 5).join(', ')}{csvHeaders.length > 5 ? `, +${csvHeaders.length - 5} more` : ''}
+                    </div>
+                  )}
                 </div>
 
                 <ColumnMapper
