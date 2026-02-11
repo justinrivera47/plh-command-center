@@ -236,6 +236,35 @@ export function useUpdateVendorTrades() {
   });
 }
 
+// Delete a vendor
+export function useDeleteVendor() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (vendorId: string) => {
+      // Delete vendor trades first (foreign key constraint)
+      const { error: tradesError } = await supabase
+        .from('vendor_trades')
+        .delete()
+        .eq('vendor_id', vendorId);
+
+      if (tradesError) throw tradesError;
+
+      // Delete the vendor
+      const { error } = await supabase
+        .from('vendors')
+        .delete()
+        .eq('id', vendorId);
+
+      if (error) throw error;
+      return vendorId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vendors'] });
+    },
+  });
+}
+
 // Search vendors by name
 export function useSearchVendors(searchTerm: string) {
   const { data: vendors, ...rest } = useVendors();

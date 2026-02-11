@@ -1,27 +1,31 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import { useVendor, useVendorTrades, useUpdateVendor, useTradeCategories, useUpdateVendorTrades } from '../../hooks/useVendors';
+import { useVendor, useVendorTrades, useUpdateVendor, useTradeCategories, useUpdateVendorTrades, useDeleteVendor } from '../../hooks/useVendors';
 import { useQuotes } from '../../hooks/useQuotes';
 import { EmptyState } from '../shared/EmptyState';
 import { SkeletonList } from '../shared/SkeletonCard';
+import { DeleteConfirmDialog } from '../shared/DeleteConfirmDialog';
 import { RATING_CONFIG, QUOTE_STATUS_CONFIG } from '../../lib/constants';
 import type { Rating } from '../../lib/types';
 
 export function VendorDetail() {
   const { vendorId } = useParams();
+  const navigate = useNavigate();
   const { data: vendor, isLoading: vendorLoading } = useVendor(vendorId);
   const { data: trades, isLoading: tradesLoading } = useVendorTrades(vendorId);
   const { data: allTradeCategories } = useTradeCategories();
   const { data: quotes, isLoading: quotesLoading } = useQuotes();
   const updateVendor = useUpdateVendor();
   const updateVendorTrades = useUpdateVendorTrades();
+  const deleteVendor = useDeleteVendor();
 
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [emailCopied, setEmailCopied] = useState(false);
   const [selectedTradeIds, setSelectedTradeIds] = useState<string[]>([]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleCopyEmail = async () => {
     if (vendor?.email) {
@@ -94,6 +98,17 @@ export function VendorDetail() {
     );
   };
 
+  const handleDeleteVendor = async () => {
+    if (!vendorId) return;
+    try {
+      await deleteVendor.mutateAsync(vendorId);
+      toast.success('Vendor deleted');
+      navigate('/vendors');
+    } catch (error) {
+      toast.error('Failed to delete vendor');
+    }
+  };
+
   // Filter quotes for this vendor
   const vendorQuotes = quotes?.filter((q) => q.vendor_id === vendorId) || [];
 
@@ -138,12 +153,23 @@ export function VendorDetail() {
         </Link>
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold text-text-primary">{vendor.company_name}</h1>
-          <button
-            onClick={() => setIsEditing(!isEditing)}
-            className="text-sm text-primary-600 hover:text-primary-700 font-medium"
-          >
-            {isEditing ? 'Cancel' : 'Edit'}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsEditing(!isEditing)}
+              className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+            >
+              {isEditing ? 'Cancel' : 'Edit'}
+            </button>
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="p-2 text-text-secondary hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              title="Delete vendor"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -403,6 +429,17 @@ export function VendorDetail() {
           <p className="text-sm text-text-secondary">No quotes from this vendor yet</p>
         )}
       </div>
+
+      {/* Delete confirmation dialog */}
+      {showDeleteConfirm && (
+        <DeleteConfirmDialog
+          title="Delete Vendor"
+          message={`Are you sure you want to delete "${vendor.company_name}"? This will remove the vendor and their trade associations. This action cannot be undone.`}
+          onConfirm={handleDeleteVendor}
+          onCancel={() => setShowDeleteConfirm(false)}
+          isDeleting={deleteVendor.isPending}
+        />
+      )}
     </div>
   );
 }
