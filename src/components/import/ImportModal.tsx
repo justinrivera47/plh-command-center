@@ -562,9 +562,25 @@ export function ImportModal({ open, onClose }: ImportModalProps) {
                   )}
                 </div>
 
+                {/* Show project confirmation if selected from UI */}
+                {PROJECT_REQUIRED_TYPES.includes(importType) && projectSource !== 'csv' && (
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <p className="text-sm text-green-800">
+                      <span className="font-medium">Project:</span>{' '}
+                      {projectSource === 'existing'
+                        ? projects?.find(p => p.id === selectedProjectId)?.name
+                        : newProjectName}
+                    </p>
+                  </div>
+                )}
+
                 <ColumnMapper
                   csvHeaders={csvHeaders}
-                  targetFields={getFieldsForType(importType)}
+                  targetFields={getFieldsForType(importType).filter(field => {
+                    // Hide project_name field if project is selected from UI
+                    if (field.key === 'project_name' && projectSource !== 'csv') return false;
+                    return true;
+                  })}
                   mapping={columnMapping}
                   onMappingChange={setColumnMapping}
                 />
