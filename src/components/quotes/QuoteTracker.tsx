@@ -158,6 +158,9 @@ function QuoteRow({ quote, formatCurrency, onRowClick }: QuoteRowProps) {
         <div className="flex-1 min-w-0">
           <div className="font-medium text-text-primary truncate">
             {quote.vendor_name || 'Unknown Vendor'}
+            {quote.vendor_poc && (
+              <span className="text-text-secondary font-normal"> - {quote.vendor_poc}</span>
+            )}
           </div>
           <div className="text-sm text-text-secondary truncate">
             {quote.project_name}
