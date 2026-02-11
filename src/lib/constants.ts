@@ -27,7 +27,7 @@ export const POC_TYPE_CONFIG: Record<POCType, { label: string; icon: string }> =
   client: { label: 'Client', icon: '👤' },
   vendor: { label: 'Vendor', icon: '📦' },
   contractor: { label: 'Contractor', icon: '🔨' },
-  internal: { label: 'Internal', icon: '🏠' },
+  internal: { label: 'On Me', icon: '⚡' },
   design_team: { label: 'Design Team', icon: '🎨' },
   plh: { label: 'PLH', icon: '🏢' },
 };
