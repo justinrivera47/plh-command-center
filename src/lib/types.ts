@@ -12,6 +12,7 @@ export type RFIStatus =
   | 'waiting_on_vendor'
   | 'waiting_on_contractor'
   | 'waiting_on_design_team'
+  | 'waiting_on_plh'
   | 'waiting_on_me'
   | 'follow_up'
   | 'completed'
@@ -19,7 +20,7 @@ export type RFIStatus =
 
 export type Priority = 'P1' | 'P2' | 'P3';
 
-export type POCType = 'client' | 'vendor' | 'contractor' | 'internal' | 'design_team';
+export type POCType = 'client' | 'vendor' | 'contractor' | 'internal' | 'design_team' | 'plh';
 
 export type StallReason =
   | 'avoiding_contact'

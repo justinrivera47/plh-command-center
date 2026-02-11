@@ -22,7 +22,7 @@ export const IMPORT_TYPE_CONFIG: Record<ImportType, {
     label: 'Tasks / RFIs',
     description: 'Import tasks and action items linked to projects',
     requiredFields: ['project_name', 'task'],
-    optionalFields: ['status', 'priority', 'poc_name', 'poc_type', 'is_blocking'],
+    optionalFields: ['status', 'priority', 'poc_name', 'poc_type', 'is_blocking', 'scope', 'latest_update', 'is_complete'],
   },
   budget_items: {
     label: 'Budget Line Items',
@@ -89,6 +89,7 @@ const rfiStatusValues = [
   'waiting_on_vendor',
   'waiting_on_contractor',
   'waiting_on_design_team',
+  'waiting_on_plh',
   'waiting_on_me',
   'follow_up',
   'completed',
@@ -96,7 +97,7 @@ const rfiStatusValues = [
 ] as const;
 
 const priorityValues = ['P1', 'P2', 'P3'] as const;
-const pocTypeValues = ['client', 'vendor', 'contractor', 'internal', 'design_team'] as const;
+const pocTypeValues = ['client', 'vendor', 'contractor', 'internal', 'design_team', 'plh'] as const;
 
 export const importTaskSchema = z.object({
   project_name: z.string().min(1, 'Project name is required'),
@@ -124,6 +125,14 @@ export const importTaskSchema = z.object({
       return pocTypeValues.includes(normalized as any) ? normalized : null;
     }),
   is_blocking: stringToBoolean,
+  scope: emptyToNullOptional,
+  latest_update: emptyToNullOptional,
+  is_complete: z.string()
+    .optional()
+    .transform(val => {
+      if (!val || val === '') return false;
+      return ['true', '1', 'yes', 'y', 'closed', 'done', 'complete'].includes(val.toLowerCase());
+    }),
 });
 
 export type ImportTaskRow = z.input<typeof importTaskSchema>;
@@ -181,12 +190,15 @@ export const PROJECT_FIELDS: FieldDefinition[] = [
 
 export const TASK_FIELDS: FieldDefinition[] = [
   { key: 'project_name', label: 'Project Name', required: true, aliases: ['project_name', 'project', 'project_title'] },
-  { key: 'task', label: 'Task Description', required: true, aliases: ['task', 'description', 'title', 'item', 'action'] },
+  { key: 'task', label: 'Task Description', required: true, aliases: ['task', 'description', 'title', 'item', 'action', 'rfi'] },
   { key: 'status', label: 'Status', required: false, aliases: ['status', 'state', 'task_status'] },
   { key: 'priority', label: 'Priority', required: false, aliases: ['priority', 'urgency', 'importance'] },
-  { key: 'poc_name', label: 'Contact Name', required: false, aliases: ['poc_name', 'contact', 'assigned_to', 'owner'] },
+  { key: 'poc_name', label: 'Contact Name', required: false, aliases: ['poc_name', 'contact', 'assigned_to', 'owner', 'rfi_poc', 'rfipoc', 'poc'] },
   { key: 'poc_type', label: 'Contact Type', required: false, aliases: ['poc_type', 'contact_type', 'type'] },
   { key: 'is_blocking', label: 'Is Blocking', required: false, aliases: ['is_blocking', 'blocking', 'blocker'] },
+  { key: 'scope', label: 'Scope', required: false, aliases: ['scope', 'scope_of_work', 'details', 'notes'] },
+  { key: 'latest_update', label: 'Latest Update', required: false, aliases: ['latest_update', 'updates', 'update', 'last_update', 'notes'] },
+  { key: 'is_complete', label: 'Closed Out', required: false, aliases: ['is_complete', 'closed_out', 'closedout', 'closed', 'complete', 'done'] },
 ];
 
 export const BUDGET_ITEM_FIELDS: FieldDefinition[] = [

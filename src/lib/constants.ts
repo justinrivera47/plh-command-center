@@ -10,6 +10,7 @@ export const RFI_STATUS_CONFIG: Record<RFIStatus, { label: string; icon: string;
   waiting_on_vendor: { label: 'Vendor', icon: '📦', color: 'text-purple-600 bg-purple-100' },
   waiting_on_contractor: { label: 'Contractor', icon: '🔨', color: 'text-orange-600 bg-orange-100' },
   waiting_on_design_team: { label: 'Design Team', icon: '🎨', color: 'text-pink-600 bg-pink-100' },
+  waiting_on_plh: { label: 'PLH', icon: '🏢', color: 'text-teal-600 bg-teal-100' },
   waiting_on_me: { label: 'On Me', icon: '⚡', color: 'text-amber-600 bg-amber-100' },
   follow_up: { label: 'Follow Up', icon: '🔥', color: 'text-red-600 bg-red-100' },
   completed: { label: 'Done', icon: '✓', color: 'text-green-600 bg-green-100' },
@@ -28,6 +29,7 @@ export const POC_TYPE_CONFIG: Record<POCType, { label: string; icon: string }> =
   contractor: { label: 'Contractor', icon: '🔨' },
   internal: { label: 'Internal', icon: '🏠' },
   design_team: { label: 'Design Team', icon: '🎨' },
+  plh: { label: 'PLH', icon: '🏢' },
 };
 
 // ============================================
@@ -40,6 +42,7 @@ export const POC_TYPE_TO_STATUS: Record<POCType, RFIStatus> = {
   vendor: 'waiting_on_vendor',
   contractor: 'waiting_on_contractor',
   design_team: 'waiting_on_design_team',
+  plh: 'waiting_on_plh',
   internal: 'waiting_on_me',
 };
 
@@ -49,6 +52,7 @@ export const STATUS_TO_POC_TYPE: Partial<Record<RFIStatus, POCType>> = {
   waiting_on_vendor: 'vendor',
   waiting_on_contractor: 'contractor',
   waiting_on_design_team: 'design_team',
+  waiting_on_plh: 'plh',
   waiting_on_me: 'internal',
 };
 
@@ -58,6 +62,7 @@ export const ASSIGNED_STATUSES: RFIStatus[] = [
   'waiting_on_vendor',
   'waiting_on_contractor',
   'waiting_on_design_team',
+  'waiting_on_plh',
   'waiting_on_me',
 ];
 

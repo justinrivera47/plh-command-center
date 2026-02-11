@@ -243,7 +243,9 @@ export function useCSVImport() {
             poc_name: row.poc_name,
             poc_type: row.poc_type,
             is_blocking: row.is_blocking,
-            is_complete: row.status === 'completed',
+            is_complete: row.is_complete || row.status === 'completed',
+            scope: row.scope,
+            latest_update: row.latest_update,
             follow_up_days: 3,
           });
 

@@ -2,7 +2,8 @@ import { useState, useCallback, useRef } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { toast } from 'sonner';
 import { useCSVImport, type ImportResult, type ValidationError } from '../../hooks/useCSVImport';
-import { useActiveProjects } from '../../hooks/useProjects';
+import { useActiveProjects, useCreateProject } from '../../hooks/useProjects';
+import { useAuth } from '../../hooks/useAuth';
 import {
   type ImportType,
   IMPORT_TYPE_CONFIG,
@@ -38,11 +39,14 @@ export function ImportModal({ open, onClose }: ImportModalProps) {
   // Project selection state
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [newProjectName, setNewProjectName] = useState<string>('');
-  const [projectSource, setProjectSource] = useState<'existing' | 'new' | 'csv'>('existing');
+  const [newClientName, setNewClientName] = useState<string>('');
+  const [projectSource, setProjectSource] = useState<'existing' | 'new' | 'csv'>('new');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { parseFile, applyMapping, validateData, importData, progress } = useCSVImport();
   const { data: projects } = useActiveProjects();
+  const createProject = useCreateProject();
+  const { user } = useAuth();
 
   const resetState = useCallback(() => {
     setStep('select_type');
@@ -58,7 +62,8 @@ export function ImportModal({ open, onClose }: ImportModalProps) {
     setPendingFile(null);
     setSelectedProjectId('');
     setNewProjectName('');
-    setProjectSource('existing');
+    setNewClientName('');
+    setProjectSource('new');
   }, []);
 
   const handleClose = () => {
@@ -81,9 +86,15 @@ export function ImportModal({ open, onClose }: ImportModalProps) {
       toast.error('Please select a project');
       return;
     }
-    if (projectSource === 'new' && !newProjectName.trim()) {
-      toast.error('Please enter a project name');
-      return;
+    if (projectSource === 'new') {
+      if (!newProjectName.trim()) {
+        toast.error('Please enter a project name');
+        return;
+      }
+      if (!newClientName.trim()) {
+        toast.error('Please enter a client name');
+        return;
+      }
     }
     setStep('upload');
   };
@@ -192,11 +203,29 @@ export function ImportModal({ open, onClose }: ImportModalProps) {
   };
 
   const handleImport = async () => {
-    if (!importType || validatedData.length === 0) return;
+    if (!importType || validatedData.length === 0 || !user) return;
 
     setStep('importing');
 
     try {
+      // If creating a new project, create it first
+      if (projectSource === 'new' && PROJECT_REQUIRED_TYPES.includes(importType)) {
+        try {
+          await createProject.mutateAsync({
+            user_id: user.id,
+            name: newProjectName.trim(),
+            client_name: newClientName.trim(),
+            status: 'active',
+            userId: user.id,
+          });
+          toast.success(`Created project: ${newProjectName}`);
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'Failed to create project');
+          setStep('preview');
+          return;
+        }
+      }
+
       const result = await importData(validatedData, importType);
       setImportResult(result);
       setStep('summary');
@@ -389,13 +418,22 @@ export function ImportModal({ open, onClose }: ImportModalProps) {
                         Create a new project for these items
                       </p>
                       {projectSource === 'new' && (
-                        <input
-                          type="text"
-                          value={newProjectName}
-                          onChange={(e) => setNewProjectName(e.target.value)}
-                          placeholder="Enter project name..."
-                          className="mt-2 w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                        />
+                        <div className="space-y-2 mt-2">
+                          <input
+                            type="text"
+                            value={newProjectName}
+                            onChange={(e) => setNewProjectName(e.target.value)}
+                            placeholder="Project name *"
+                            className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          />
+                          <input
+                            type="text"
+                            value={newClientName}
+                            onChange={(e) => setNewClientName(e.target.value)}
+                            placeholder="Client name *"
+                            className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          />
+                        </div>
                       )}
                     </div>
                   </label>
@@ -482,9 +520,14 @@ export function ImportModal({ open, onClose }: ImportModalProps) {
                       {projectSource === 'existing'
                         ? projects?.find(p => p.id === selectedProjectId)?.name
                         : newProjectName}
+                      {projectSource === 'new' && newClientName && (
+                        <span className="text-green-600"> (Client: {newClientName})</span>
+                      )}
                     </p>
                     <p className="text-xs text-green-600 mt-1">
-                      All imported items will be added to this project
+                      {projectSource === 'new'
+                        ? 'A new project will be created and all items will be added to it'
+                        : 'All imported items will be added to this project'}
                     </p>
                   </div>
                 )}
@@ -570,6 +613,9 @@ export function ImportModal({ open, onClose }: ImportModalProps) {
                       {projectSource === 'existing'
                         ? projects?.find(p => p.id === selectedProjectId)?.name
                         : newProjectName}
+                      {projectSource === 'new' && newClientName && (
+                        <span className="text-green-600"> (Client: {newClientName})</span>
+                      )}
                     </p>
                   </div>
                 )}

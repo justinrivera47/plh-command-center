@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import { useVendor, useVendorTrades, useUpdateVendor } from '../../hooks/useVendors';
+import { useVendor, useVendorTrades, useUpdateVendor, useTradeCategories, useUpdateVendorTrades } from '../../hooks/useVendors';
 import { useQuotes } from '../../hooks/useQuotes';
 import { EmptyState } from '../shared/EmptyState';
 import { SkeletonList } from '../shared/SkeletonCard';
@@ -13,12 +13,15 @@ export function VendorDetail() {
   const { vendorId } = useParams();
   const { data: vendor, isLoading: vendorLoading } = useVendor(vendorId);
   const { data: trades, isLoading: tradesLoading } = useVendorTrades(vendorId);
+  const { data: allTradeCategories } = useTradeCategories();
   const { data: quotes, isLoading: quotesLoading } = useQuotes();
   const updateVendor = useUpdateVendor();
+  const updateVendorTrades = useUpdateVendorTrades();
 
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [emailCopied, setEmailCopied] = useState(false);
+  const [selectedTradeIds, setSelectedTradeIds] = useState<string[]>([]);
 
   const handleCopyEmail = async () => {
     if (vendor?.email) {
@@ -60,17 +63,35 @@ export function VendorDetail() {
     }
   }, [vendor, reset]);
 
+  // Initialize selected trades when trades load
+  useEffect(() => {
+    if (trades) {
+      setSelectedTradeIds(trades.map(t => t.id));
+    }
+  }, [trades]);
+
   const onSubmit = async (data: any) => {
     if (!vendorId) return;
     setSaving(true);
     try {
       await updateVendor.mutateAsync({ id: vendorId, ...data });
+      await updateVendorTrades.mutateAsync({ vendorId, tradeIds: selectedTradeIds });
+      toast.success('Vendor updated successfully');
       setIsEditing(false);
     } catch (error) {
       console.error('Failed to update vendor:', error);
+      toast.error('Failed to update vendor');
     } finally {
       setSaving(false);
     }
+  };
+
+  const toggleTrade = (tradeId: string) => {
+    setSelectedTradeIds(prev =>
+      prev.includes(tradeId)
+        ? prev.filter(id => id !== tradeId)
+        : [...prev, tradeId]
+    );
   };
 
   // Filter quotes for this vendor
@@ -206,6 +227,32 @@ export function VendorDetail() {
                   ))}
                 </select>
               </div>
+            </div>
+
+            {/* Trades multi-select */}
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-2">
+                Trades
+              </label>
+              <div className="flex flex-wrap gap-2 p-3 border border-border rounded-md bg-gray-50 max-h-48 overflow-y-auto">
+                {allTradeCategories?.map((trade) => (
+                  <button
+                    key={trade.id}
+                    type="button"
+                    onClick={() => toggleTrade(trade.id)}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                      selectedTradeIds.includes(trade.id)
+                        ? 'bg-primary-600 text-white'
+                        : 'bg-white border border-border text-text-secondary hover:border-primary-300'
+                    }`}
+                  >
+                    {trade.name}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-text-secondary mt-1">
+                Click to select/deselect trades ({selectedTradeIds.length} selected)
+              </p>
             </div>
 
             <div>

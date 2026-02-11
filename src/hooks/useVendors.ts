@@ -199,6 +199,43 @@ export function useUpdateVendor() {
   });
 }
 
+// Update vendor trades (replace all trades with new set)
+export function useUpdateVendorTrades() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ vendorId, tradeIds }: { vendorId: string; tradeIds: string[] }) => {
+      // Delete existing trades
+      const { error: deleteError } = await supabase
+        .from('vendor_trades')
+        .delete()
+        .eq('vendor_id', vendorId);
+
+      if (deleteError) throw deleteError;
+
+      // Insert new trades
+      if (tradeIds.length > 0) {
+        const vendorTrades = tradeIds.map((tradeId) => ({
+          vendor_id: vendorId,
+          trade_category_id: tradeId,
+        }));
+
+        const { error: insertError } = await supabase
+          .from('vendor_trades')
+          .insert(vendorTrades);
+
+        if (insertError) throw insertError;
+      }
+
+      return { vendorId, tradeIds };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['vendors'] });
+      queryClient.invalidateQueries({ queryKey: ['vendor-trades', data.vendorId] });
+    },
+  });
+}
+
 // Search vendors by name
 export function useSearchVendors(searchTerm: string) {
   const { data: vendors, ...rest } = useVendors();
