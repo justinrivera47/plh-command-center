@@ -327,7 +327,7 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
         {/* Footer: Status, POC, Days, Action */}
         <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
           <div className="flex items-center gap-2">
-            <StatusBadge status={task.status} overdue={task.is_overdue} size="sm" />
+            <StatusBadge status={task.status} overdue={task.is_overdue} size="lg" />
             {task.poc_name && (
               <span className="text-xs text-text-secondary">{task.poc_name}</span>
             )}

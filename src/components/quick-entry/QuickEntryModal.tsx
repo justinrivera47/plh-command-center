@@ -211,7 +211,9 @@ function LogQuoteForm() {
         >
           <option value="">Select vendor (or add new below)</option>
           {vendors?.map((v) => (
-            <option key={v.id} value={v.id}>{v.company_name}</option>
+            <option key={v.id} value={v.id}>
+              {v.company_name}{v.poc_name ? ` - ${v.poc_name}` : ''}
+            </option>
           ))}
         </select>
       </div>

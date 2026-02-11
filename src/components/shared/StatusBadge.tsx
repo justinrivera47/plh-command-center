@@ -4,13 +4,16 @@ import type { RFIStatus } from '../../lib/types';
 interface StatusBadgeProps {
   status: RFIStatus;
   overdue?: boolean;
-  size?: 'sm' | 'md';
+  size?: 'sm' | 'md' | 'lg';
 }
 
 export function StatusBadge({ status, overdue, size = 'md' }: StatusBadgeProps) {
   const config = RFI_STATUS_CONFIG[status];
 
-  const sizeClasses = size === 'sm' ? 'text-xs px-1.5 py-0.5' : 'text-xs px-2 py-1';
+  const sizeClasses =
+    size === 'sm' ? 'text-xs px-1.5 py-0.5' :
+    size === 'lg' ? 'text-sm px-2.5 py-1' :
+    'text-xs px-2 py-1';
 
   return (
     <span
