@@ -216,6 +216,11 @@ export function ImportModal({ open, onClose }: ImportModalProps) {
             name: newProjectName.trim(),
             client_name: newClientName.trim(),
             status: 'active',
+            address: null,
+            client_email: null,
+            client_phone: null,
+            total_budget: null,
+            notes: null,
             userId: user.id,
           });
           toast.success(`Created project: ${newProjectName}`);
