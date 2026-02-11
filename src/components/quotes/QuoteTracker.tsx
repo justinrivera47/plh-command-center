@@ -43,6 +43,12 @@ export function QuoteTracker() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-semibold text-text-primary">Quotes</h1>
+        <button
+          onClick={() => openQuickEntry('quote')}
+          className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
+        >
+          <span>+</span> Log Quote
+        </button>
       </div>
 
       {/* Project filter */}
