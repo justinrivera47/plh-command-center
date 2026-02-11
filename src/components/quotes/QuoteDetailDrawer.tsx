@@ -421,8 +421,8 @@ export function QuoteDetailDrawer() {
                   <label className="block text-sm font-medium text-text-secondary mb-1">Scope Notes</label>
                   <textarea
                     {...register('scope_notes')}
-                    rows={2}
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+                    rows={8}
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y min-h-[180px] overflow-y-auto"
                     placeholder="Any notes about scope..."
                   />
                 </div>
@@ -441,8 +441,8 @@ export function QuoteDetailDrawer() {
                   <label className="block text-sm font-medium text-text-secondary mb-1">Notes</label>
                   <textarea
                     {...register('notes')}
-                    rows={3}
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+                    rows={8}
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y min-h-[180px] overflow-y-auto"
                     placeholder="Any additional notes..."
                   />
                 </div>
