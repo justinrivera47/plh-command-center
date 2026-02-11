@@ -30,6 +30,53 @@ export const POC_TYPE_CONFIG: Record<POCType, { label: string; icon: string }> =
   design_team: { label: 'Design Team', icon: '🎨' },
 };
 
+// ============================================
+// POC Type <-> Status Linking
+// ============================================
+
+// Map POC type to corresponding "waiting on" status
+export const POC_TYPE_TO_STATUS: Record<POCType, RFIStatus> = {
+  client: 'waiting_on_client',
+  vendor: 'waiting_on_vendor',
+  contractor: 'waiting_on_contractor',
+  design_team: 'waiting_on_design_team',
+  internal: 'waiting_on_me',
+};
+
+// Map "waiting on" status back to POC type
+export const STATUS_TO_POC_TYPE: Partial<Record<RFIStatus, POCType>> = {
+  waiting_on_client: 'client',
+  waiting_on_vendor: 'vendor',
+  waiting_on_contractor: 'contractor',
+  waiting_on_design_team: 'design_team',
+  waiting_on_me: 'internal',
+};
+
+// Statuses that represent "assigned to someone"
+export const ASSIGNED_STATUSES: RFIStatus[] = [
+  'waiting_on_client',
+  'waiting_on_vendor',
+  'waiting_on_contractor',
+  'waiting_on_design_team',
+  'waiting_on_me',
+];
+
+// Helper: Get status from POC type (defaults to 'open' if no POC)
+export function getStatusFromPOCType(pocType: POCType | null | undefined): RFIStatus {
+  if (!pocType) return 'open';
+  return POC_TYPE_TO_STATUS[pocType] || 'open';
+}
+
+// Helper: Get POC type from status (returns null for non-assignment statuses)
+export function getPOCTypeFromStatus(status: RFIStatus): POCType | null {
+  return STATUS_TO_POC_TYPE[status] || null;
+}
+
+// Helper: Check if status is an "assigned" status
+export function isAssignedStatus(status: RFIStatus): boolean {
+  return ASSIGNED_STATUSES.includes(status);
+}
+
 export const QUOTE_STATUS_CONFIG: Record<QuoteStatus, { label: string; color: string }> = {
   pending: { label: 'Pending', color: 'text-gray-600 bg-gray-100' },
   quoted: { label: 'Quoted', color: 'text-blue-600 bg-blue-100' },

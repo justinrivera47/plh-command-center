@@ -7,7 +7,7 @@ import { BlockedByBanner } from '../shared/BlockedByBanner';
 import { DaysCounter } from '../shared/DaysCounter';
 import { useUIStore } from '../../stores/uiStore';
 import { useUpdateRFI, useUpdateRFIStatus } from '../../hooks/useRFIs';
-import { RFI_STATUS_CONFIG, STALL_PROMPTS } from '../../lib/constants';
+import { RFI_STATUS_CONFIG, STALL_PROMPTS, getPOCTypeFromStatus, isAssignedStatus } from '../../lib/constants';
 
 interface TaskCardProps {
   task: WarRoomItem;
@@ -110,10 +110,32 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
   };
 
   const handleStatusChange = async (newStatus: RFIStatus) => {
+    // Update status via the status mutation
     await updateRFIStatus.mutateAsync({
       rfi_id: task.id,
       new_status: newStatus,
     });
+
+    // Sync POC type based on the new status
+    // If status is 'open', clear the assignment; if it's a "waiting_on_X" status, set corresponding POC type
+    if (newStatus === 'open') {
+      // Clear assignment when status is set to open
+      await updateRFI.mutateAsync({
+        id: task.id,
+        poc_type: null,
+        poc_name: null,
+      });
+    } else if (isAssignedStatus(newStatus)) {
+      // Set POC type based on the waiting status
+      const newPocType = getPOCTypeFromStatus(newStatus);
+      if (newPocType && newPocType !== task.poc_type) {
+        await updateRFI.mutateAsync({
+          id: task.id,
+          poc_type: newPocType,
+        });
+      }
+    }
+
     setEditingField(null);
   };
 

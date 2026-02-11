@@ -4,7 +4,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { toast } from 'sonner';
 import { useUIStore } from '../../stores/uiStore';
 import { useActiveProjects, useCreateProject } from '../../hooks/useProjects';
-import { useOpenRFIs, useCreateRFI, useUpdateRFIStatus } from '../../hooks/useRFIs';
+import { useOpenRFIs, useCreateRFI, useUpdateRFI, useUpdateRFIStatus } from '../../hooks/useRFIs';
 import { useCreateQuote } from '../../hooks/useQuotes';
 import { useVendors, useTradeCategories, useCreateVendor } from '../../hooks/useVendors';
 import { useCreateCallLog, useUpdateCallLogRFI } from '../../hooks/useCallLogs';
@@ -23,7 +23,7 @@ import {
   type NewVendorFormData,
   type NewProjectFormData,
 } from '../../lib/schemas';
-import { RFI_STATUS_CONFIG, PRIORITY_CONFIG, POC_TYPE_CONFIG } from '../../lib/constants';
+import { RFI_STATUS_CONFIG, PRIORITY_CONFIG, POC_TYPE_CONFIG, getStatusFromPOCType, getPOCTypeFromStatus, isAssignedStatus } from '../../lib/constants';
 import type { RFIStatus, Priority, POCType } from '../../lib/types';
 
 const ENTRY_TYPES = [
@@ -283,6 +283,7 @@ function LogQuoteForm() {
 function StatusUpdateForm() {
   const { data: projects } = useActiveProjects();
   const updateRFIStatus = useUpdateRFIStatus();
+  const updateRFI = useUpdateRFI();
   const closeQuickEntry = useUIStore((state) => state.closeQuickEntry);
 
   const {
@@ -298,12 +299,31 @@ function StatusUpdateForm() {
   const { data: rfis } = useOpenRFIs(projectId || undefined);
 
   const onSubmit = async (data: StatusUpdateFormData) => {
+    // Update the status
     await updateRFIStatus.mutateAsync({
       rfi_id: data.rfi_id,
       new_status: data.new_status,
       note: data.note,
       next_action_date: data.next_action_date,
     });
+
+    // Sync POC type based on the new status
+    // If status is 'open', clear the assignment; if it's a "waiting_on_X" status, set corresponding POC type
+    if (data.new_status === 'open') {
+      await updateRFI.mutateAsync({
+        id: data.rfi_id,
+        poc_type: null,
+        poc_name: null,
+      });
+    } else if (isAssignedStatus(data.new_status)) {
+      const newPocType = getPOCTypeFromStatus(data.new_status);
+      if (newPocType) {
+        await updateRFI.mutateAsync({
+          id: data.rfi_id,
+          poc_type: newPocType,
+        });
+      }
+    }
 
     toast.success('Status updated');
     closeQuickEntry();
@@ -444,6 +464,10 @@ function NewRFIForm() {
   const onSubmit = async (data: NewRFIFormData) => {
     if (!user) return;
 
+    // Auto-set status based on who's involved (poc_type)
+    // If no one is assigned, status is 'open'; otherwise, status reflects the assignment
+    const autoStatus = getStatusFromPOCType(data.poc_type);
+
     await createRFI.mutateAsync({
       user_id: user.id,
       project_id: data.project_id,
@@ -451,7 +475,7 @@ function NewRFIForm() {
       scope: data.scope || null,
       poc_name: data.poc_name || null,
       poc_type: data.poc_type || null,
-      status: 'open',
+      status: autoStatus,
       priority: data.priority,
       is_blocking: data.is_blocking,
       blocks_description: data.is_blocking ? data.blocks_description || null : null,
