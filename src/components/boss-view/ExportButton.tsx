@@ -1,7 +1,10 @@
 import { useState } from 'react';
-import * as XLSX from 'xlsx-js-style';
 import { toast } from 'sonner';
 import { useExportData, type ExportData } from '../../hooks/useExportData';
+
+// Lazy load xlsx library - it's ~800KB and only needed when exporting
+type XLSXType = typeof import('xlsx-js-style');
+let XLSX: XLSXType | null = null;
 
 // ============================================
 // Style Definitions
@@ -79,6 +82,11 @@ export function ExportButton() {
     setIsExporting(true);
 
     try {
+      // Lazy load xlsx library if not already loaded
+      if (!XLSX) {
+        XLSX = await import('xlsx-js-style');
+      }
+
       // Refetch to get latest data
       const { data } = await refetch();
       if (!data) {
@@ -86,7 +94,7 @@ export function ExportButton() {
         return;
       }
 
-      generateExcel(data);
+      generateExcel(XLSX, data);
       toast.success('Report exported successfully');
     } catch (error) {
       console.error('Export failed:', error);
@@ -121,8 +129,8 @@ export function ExportButton() {
 // Excel Generation
 // ============================================
 
-function generateExcel(data: ExportData) {
-  const wb = XLSX.utils.book_new();
+function generateExcel(xlsx: XLSXType, data: ExportData) {
+  const wb = xlsx.utils.book_new();
   const reportDate = data.generatedAt.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -130,33 +138,33 @@ function generateExcel(data: ExportData) {
   });
 
   // Sheet 1: Executive Summary
-  createExecutiveSummarySheet(wb, data, reportDate);
+  createExecutiveSummarySheet(xlsx, wb, data, reportDate);
 
   // Sheet 2: Budget Detail
-  createBudgetDetailSheet(wb, data, reportDate);
+  createBudgetDetailSheet(xlsx, wb, data, reportDate);
 
   // Sheet 3: Open Tasks
-  createOpenTasksSheet(wb, data, reportDate);
+  createOpenTasksSheet(xlsx, wb, data, reportDate);
 
   // Sheet 4: Quote Comparison
-  createQuoteComparisonSheet(wb, data, reportDate);
+  createQuoteComparisonSheet(xlsx, wb, data, reportDate);
 
   // Sheet 5: Recent Activity
-  createRecentActivitySheet(wb, data, reportDate);
+  createRecentActivitySheet(xlsx, wb, data, reportDate);
 
   // Sheet 6: Decisions Needed
-  createDecisionsNeededSheet(wb, data, reportDate);
+  createDecisionsNeededSheet(xlsx, wb, data, reportDate);
 
   // Generate filename and save
   const dateStr = data.generatedAt.toISOString().split('T')[0];
-  XLSX.writeFile(wb, `PLH-Executive-Report-${dateStr}.xlsx`);
+  xlsx.writeFile(wb, `PLH-Executive-Report-${dateStr}.xlsx`);
 }
 
 // ============================================
 // Sheet 1: Executive Summary
 // ============================================
 
-function createExecutiveSummarySheet(wb: XLSX.WorkBook, data: ExportData, reportDate: string) {
+function createExecutiveSummarySheet(xlsx: XLSXType, wb: ReturnType<XLSXType['utils']['book_new']>, data: ExportData, reportDate: string) {
   const headers = [
     'Project Name',
     'Client',
@@ -196,7 +204,7 @@ function createExecutiveSummarySheet(wb: XLSX.WorkBook, data: ExportData, report
     ...rows,
   ];
 
-  const ws = XLSX.utils.aoa_to_sheet(sheetData);
+  const ws = xlsx.utils.aoa_to_sheet(sheetData);
 
   // Set column widths
   ws['!cols'] = [
@@ -220,7 +228,7 @@ function createExecutiveSummarySheet(wb: XLSX.WorkBook, data: ExportData, report
 
   // Style headers (row 4)
   for (let col = 0; col < headers.length; col++) {
-    const cellRef = XLSX.utils.encode_cell({ r: 3, c: col });
+    const cellRef = xlsx.utils.encode_cell({ r: 3, c: col });
     if (ws[cellRef]) {
       ws[cellRef].s = STYLES.header;
     }
@@ -232,7 +240,7 @@ function createExecutiveSummarySheet(wb: XLSX.WorkBook, data: ExportData, report
     if (!rowData) continue;
 
     // Health column (D)
-    const healthCell = XLSX.utils.encode_cell({ r: row, c: 3 });
+    const healthCell = xlsx.utils.encode_cell({ r: row, c: 3 });
     if (ws[healthCell]) {
       ws[healthCell].s = rowData.health === 'On Track'
         ? STYLES.healthOnTrack
@@ -243,7 +251,7 @@ function createExecutiveSummarySheet(wb: XLSX.WorkBook, data: ExportData, report
 
     // Currency columns (E, F, G)
     [4, 5, 6].forEach(col => {
-      const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
+      const cellRef = xlsx.utils.encode_cell({ r: row, c: col });
       if (ws[cellRef]) {
         if (col === 6) {
           // Variance column - color coded
@@ -255,7 +263,7 @@ function createExecutiveSummarySheet(wb: XLSX.WorkBook, data: ExportData, report
     });
 
     // Percentage column (H)
-    const pctCell = XLSX.utils.encode_cell({ r: row, c: 7 });
+    const pctCell = xlsx.utils.encode_cell({ r: row, c: 7 });
     if (ws[pctCell] && ws[pctCell].v !== null) {
       ws[pctCell].s = STYLES.percent;
     }
@@ -264,14 +272,14 @@ function createExecutiveSummarySheet(wb: XLSX.WorkBook, data: ExportData, report
   // Freeze panes (freeze after row 4 - header row)
   ws['!freeze'] = { xSplit: 0, ySplit: 4 };
 
-  XLSX.utils.book_append_sheet(wb, ws, 'Executive Summary');
+  xlsx.utils.book_append_sheet(wb, ws, 'Executive Summary');
 }
 
 // ============================================
 // Sheet 2: Budget Detail
 // ============================================
 
-function createBudgetDetailSheet(wb: XLSX.WorkBook, data: ExportData, reportDate: string) {
+function createBudgetDetailSheet(xlsx: XLSXType, wb: ReturnType<XLSXType['utils']['book_new']>, data: ExportData, reportDate: string) {
   const headers = ['Project', 'Budget Area', 'Line Item', 'Budgeted', 'Actual', 'Variance', 'Variance %'];
 
   const rows = data.budgetDetail.map(item => [
@@ -292,7 +300,7 @@ function createBudgetDetailSheet(wb: XLSX.WorkBook, data: ExportData, reportDate
     ...rows,
   ];
 
-  const ws = XLSX.utils.aoa_to_sheet(sheetData);
+  const ws = xlsx.utils.aoa_to_sheet(sheetData);
 
   ws['!cols'] = [
     { wch: 30 }, // Project
@@ -310,7 +318,7 @@ function createBudgetDetailSheet(wb: XLSX.WorkBook, data: ExportData, reportDate
 
   // Style headers
   for (let col = 0; col < headers.length; col++) {
-    const cellRef = XLSX.utils.encode_cell({ r: 3, c: col });
+    const cellRef = xlsx.utils.encode_cell({ r: 3, c: col });
     if (ws[cellRef]) {
       ws[cellRef].s = STYLES.header;
     }
@@ -324,14 +332,14 @@ function createBudgetDetailSheet(wb: XLSX.WorkBook, data: ExportData, reportDate
     // Apply subtotal/total row styling
     if (rowData.isProjectTotal) {
       for (let col = 0; col < headers.length; col++) {
-        const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
+        const cellRef = xlsx.utils.encode_cell({ r: row, c: col });
         if (ws[cellRef]) {
           ws[cellRef].s = { ...STYLES.projectTotalRow, ...(col >= 3 ? STYLES.currency : {}) };
         }
       }
     } else if (rowData.isAreaSubtotal) {
       for (let col = 0; col < headers.length; col++) {
-        const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
+        const cellRef = xlsx.utils.encode_cell({ r: row, c: col });
         if (ws[cellRef]) {
           ws[cellRef].s = { ...STYLES.subtotalRow, ...(col >= 3 ? STYLES.currency : {}) };
         }
@@ -339,20 +347,20 @@ function createBudgetDetailSheet(wb: XLSX.WorkBook, data: ExportData, reportDate
     } else {
       // Regular rows - style currency and variance
       [3, 4].forEach(col => {
-        const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
+        const cellRef = xlsx.utils.encode_cell({ r: row, c: col });
         if (ws[cellRef]) {
           ws[cellRef].s = STYLES.currency;
         }
       });
 
       // Variance column with color
-      const varCell = XLSX.utils.encode_cell({ r: row, c: 5 });
+      const varCell = xlsx.utils.encode_cell({ r: row, c: 5 });
       if (ws[varCell]) {
         ws[varCell].s = (ws[varCell].v || 0) > 0 ? STYLES.variancePositive : STYLES.varianceNegative;
       }
 
       // Variance % column
-      const pctCell = XLSX.utils.encode_cell({ r: row, c: 6 });
+      const pctCell = xlsx.utils.encode_cell({ r: row, c: 6 });
       if (ws[pctCell] && ws[pctCell].v !== null) {
         ws[pctCell].s = STYLES.percent;
       }
@@ -361,14 +369,14 @@ function createBudgetDetailSheet(wb: XLSX.WorkBook, data: ExportData, reportDate
 
   ws['!freeze'] = { xSplit: 0, ySplit: 4 };
 
-  XLSX.utils.book_append_sheet(wb, ws, 'Budget Detail');
+  xlsx.utils.book_append_sheet(wb, ws, 'Budget Detail');
 }
 
 // ============================================
 // Sheet 3: Open Tasks
 // ============================================
 
-function createOpenTasksSheet(wb: XLSX.WorkBook, data: ExportData, reportDate: string) {
+function createOpenTasksSheet(xlsx: XLSXType, wb: ReturnType<XLSXType['utils']['book_new']>, data: ExportData, reportDate: string) {
   const headers = [
     'Project',
     'Task',
@@ -401,7 +409,7 @@ function createOpenTasksSheet(wb: XLSX.WorkBook, data: ExportData, reportDate: s
     ...rows,
   ];
 
-  const ws = XLSX.utils.aoa_to_sheet(sheetData);
+  const ws = xlsx.utils.aoa_to_sheet(sheetData);
 
   ws['!cols'] = [
     { wch: 25 }, // Project
@@ -419,7 +427,7 @@ function createOpenTasksSheet(wb: XLSX.WorkBook, data: ExportData, reportDate: s
   ws['A2'].s = STYLES.dateCell;
 
   for (let col = 0; col < headers.length; col++) {
-    const cellRef = XLSX.utils.encode_cell({ r: 3, c: col });
+    const cellRef = xlsx.utils.encode_cell({ r: 3, c: col });
     if (ws[cellRef]) {
       ws[cellRef].s = STYLES.header;
     }
@@ -427,7 +435,7 @@ function createOpenTasksSheet(wb: XLSX.WorkBook, data: ExportData, reportDate: s
 
   // Style blocking cells
   for (let row = 4; row < sheetData.length; row++) {
-    const blockingCell = XLSX.utils.encode_cell({ r: row, c: 7 });
+    const blockingCell = xlsx.utils.encode_cell({ r: row, c: 7 });
     if (ws[blockingCell] && ws[blockingCell].v === 'YES') {
       ws[blockingCell].s = STYLES.healthBlocked;
     }
@@ -435,14 +443,14 @@ function createOpenTasksSheet(wb: XLSX.WorkBook, data: ExportData, reportDate: s
 
   ws['!freeze'] = { xSplit: 0, ySplit: 4 };
 
-  XLSX.utils.book_append_sheet(wb, ws, 'Open Tasks');
+  xlsx.utils.book_append_sheet(wb, ws, 'Open Tasks');
 }
 
 // ============================================
 // Sheet 4: Quote Comparison
 // ============================================
 
-function createQuoteComparisonSheet(wb: XLSX.WorkBook, data: ExportData, reportDate: string) {
+function createQuoteComparisonSheet(xlsx: XLSXType, wb: ReturnType<XLSXType['utils']['book_new']>, data: ExportData, reportDate: string) {
   const headers = [
     'Project',
     'Trade',
@@ -473,7 +481,7 @@ function createQuoteComparisonSheet(wb: XLSX.WorkBook, data: ExportData, reportD
     ...rows,
   ];
 
-  const ws = XLSX.utils.aoa_to_sheet(sheetData);
+  const ws = xlsx.utils.aoa_to_sheet(sheetData);
 
   ws['!cols'] = [
     { wch: 25 }, // Project
@@ -490,7 +498,7 @@ function createQuoteComparisonSheet(wb: XLSX.WorkBook, data: ExportData, reportD
   ws['A2'].s = STYLES.dateCell;
 
   for (let col = 0; col < headers.length; col++) {
-    const cellRef = XLSX.utils.encode_cell({ r: 3, c: col });
+    const cellRef = xlsx.utils.encode_cell({ r: 3, c: col });
     if (ws[cellRef]) {
       ws[cellRef].s = STYLES.header;
     }
@@ -503,26 +511,26 @@ function createQuoteComparisonSheet(wb: XLSX.WorkBook, data: ExportData, reportD
 
     // Currency columns
     [3, 4].forEach(col => {
-      const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
+      const cellRef = xlsx.utils.encode_cell({ r: row, c: col });
       if (ws[cellRef]) {
         ws[cellRef].s = STYLES.currency;
       }
     });
 
     // Variance column
-    const varCell = XLSX.utils.encode_cell({ r: row, c: 5 });
+    const varCell = xlsx.utils.encode_cell({ r: row, c: 5 });
     if (ws[varCell] && ws[varCell].v !== null) {
       ws[varCell].s = (ws[varCell].v || 0) > 0 ? STYLES.variancePositive : STYLES.varianceNegative;
     }
 
     // Variance % column
-    const pctCell = XLSX.utils.encode_cell({ r: row, c: 6 });
+    const pctCell = xlsx.utils.encode_cell({ r: row, c: 6 });
     if (ws[pctCell] && ws[pctCell].v !== null) {
       ws[pctCell].s = STYLES.percent;
     }
 
     // Status column - highlight approved
-    const statusCell = XLSX.utils.encode_cell({ r: row, c: 7 });
+    const statusCell = xlsx.utils.encode_cell({ r: row, c: 7 });
     if (ws[statusCell] && rowData.isApproved) {
       ws[statusCell].s = STYLES.approved;
     }
@@ -530,14 +538,14 @@ function createQuoteComparisonSheet(wb: XLSX.WorkBook, data: ExportData, reportD
 
   ws['!freeze'] = { xSplit: 0, ySplit: 4 };
 
-  XLSX.utils.book_append_sheet(wb, ws, 'Quote Comparison');
+  xlsx.utils.book_append_sheet(wb, ws, 'Quote Comparison');
 }
 
 // ============================================
 // Sheet 5: Recent Activity
 // ============================================
 
-function createRecentActivitySheet(wb: XLSX.WorkBook, data: ExportData, reportDate: string) {
+function createRecentActivitySheet(xlsx: XLSXType, wb: ReturnType<XLSXType['utils']['book_new']>, data: ExportData, reportDate: string) {
   const headers = ['Date', 'Time', 'Project', 'Action', 'Detail'];
 
   const rows = data.recentActivity.map(activity => [
@@ -556,7 +564,7 @@ function createRecentActivitySheet(wb: XLSX.WorkBook, data: ExportData, reportDa
     ...rows,
   ];
 
-  const ws = XLSX.utils.aoa_to_sheet(sheetData);
+  const ws = xlsx.utils.aoa_to_sheet(sheetData);
 
   ws['!cols'] = [
     { wch: 12 }, // Date
@@ -570,7 +578,7 @@ function createRecentActivitySheet(wb: XLSX.WorkBook, data: ExportData, reportDa
   ws['A2'].s = STYLES.dateCell;
 
   for (let col = 0; col < headers.length; col++) {
-    const cellRef = XLSX.utils.encode_cell({ r: 3, c: col });
+    const cellRef = xlsx.utils.encode_cell({ r: 3, c: col });
     if (ws[cellRef]) {
       ws[cellRef].s = STYLES.header;
     }
@@ -578,14 +586,14 @@ function createRecentActivitySheet(wb: XLSX.WorkBook, data: ExportData, reportDa
 
   ws['!freeze'] = { xSplit: 0, ySplit: 4 };
 
-  XLSX.utils.book_append_sheet(wb, ws, 'Recent Activity');
+  xlsx.utils.book_append_sheet(wb, ws, 'Recent Activity');
 }
 
 // ============================================
 // Sheet 6: Decisions Needed
 // ============================================
 
-function createDecisionsNeededSheet(wb: XLSX.WorkBook, data: ExportData, reportDate: string) {
+function createDecisionsNeededSheet(xlsx: XLSXType, wb: ReturnType<XLSXType['utils']['book_new']>, data: ExportData, reportDate: string) {
   const headers = ['Project', 'Item', 'Type', 'Detail', 'Amount', 'Days Waiting'];
 
   const rows = data.decisionsNeeded.map(decision => [
@@ -605,7 +613,7 @@ function createDecisionsNeededSheet(wb: XLSX.WorkBook, data: ExportData, reportD
     ...rows,
   ];
 
-  const ws = XLSX.utils.aoa_to_sheet(sheetData);
+  const ws = xlsx.utils.aoa_to_sheet(sheetData);
 
   ws['!cols'] = [
     { wch: 25 }, // Project
@@ -620,7 +628,7 @@ function createDecisionsNeededSheet(wb: XLSX.WorkBook, data: ExportData, reportD
   ws['A2'].s = STYLES.dateCell;
 
   for (let col = 0; col < headers.length; col++) {
-    const cellRef = XLSX.utils.encode_cell({ r: 3, c: col });
+    const cellRef = xlsx.utils.encode_cell({ r: 3, c: col });
     if (ws[cellRef]) {
       ws[cellRef].s = STYLES.header;
     }
@@ -628,7 +636,7 @@ function createDecisionsNeededSheet(wb: XLSX.WorkBook, data: ExportData, reportD
 
   // Style amount column
   for (let row = 4; row < sheetData.length; row++) {
-    const amountCell = XLSX.utils.encode_cell({ r: row, c: 4 });
+    const amountCell = xlsx.utils.encode_cell({ r: row, c: 4 });
     if (ws[amountCell] && ws[amountCell].v !== null) {
       ws[amountCell].s = STYLES.currency;
     }
@@ -636,5 +644,5 @@ function createDecisionsNeededSheet(wb: XLSX.WorkBook, data: ExportData, reportD
 
   ws['!freeze'] = { xSplit: 0, ySplit: 4 };
 
-  XLSX.utils.book_append_sheet(wb, ws, 'Decisions Needed');
+  xlsx.utils.book_append_sheet(wb, ws, 'Decisions Needed');
 }
