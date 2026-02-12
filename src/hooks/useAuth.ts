@@ -97,6 +97,52 @@ export function useAuth() {
     if (error) throw error;
   }
 
+  async function resetPassword(email: string) {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) throw error;
+  }
+
+  async function updatePassword(newPassword: string) {
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+    if (error) throw error;
+  }
+
+  async function deleteAccount() {
+    if (!state.user) throw new Error('Not authenticated');
+
+    // Delete all user data - cascades will handle related records
+    // Order matters due to foreign key constraints
+    const userId = state.user.id;
+
+    // Delete projects (cascades to rfis, quotes, budget_areas, etc.)
+    const { error: projectsError } = await supabase
+      .from('projects')
+      .delete()
+      .eq('user_id', userId);
+    if (projectsError) throw projectsError;
+
+    // Delete vendors (cascades to vendor_trades)
+    const { error: vendorsError } = await supabase
+      .from('vendors')
+      .delete()
+      .eq('user_id', userId);
+    if (vendorsError) throw vendorsError;
+
+    // Delete user profile
+    const { error: profileError } = await supabase
+      .from('user_profiles')
+      .delete()
+      .eq('id', userId);
+    if (profileError) throw profileError;
+
+    // Sign out the user
+    await signOut();
+  }
+
   async function updateProfile(updates: Partial<UserProfile>) {
     if (!state.user) throw new Error('Not authenticated');
 
@@ -123,5 +169,8 @@ export function useAuth() {
     signIn,
     signOut,
     updateProfile,
+    resetPassword,
+    updatePassword,
+    deleteAccount,
   };
 }

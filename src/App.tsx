@@ -13,6 +13,7 @@ import { AppShell } from './components/layout/AppShell';
 // Auth
 import { LoginPage } from './components/auth/LoginPage';
 import { SignUpPage } from './components/auth/SignUpPage';
+import { ResetPasswordPage } from './components/auth/ResetPasswordPage';
 
 // Onboarding
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
@@ -114,6 +115,7 @@ function App() {
             {/* Public routes */}
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignUpPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
 
             {/* Onboarding */}
             <Route

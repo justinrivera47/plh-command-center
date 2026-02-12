@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import * as Tabs from '@radix-ui/react-tabs';
 import { toast } from 'sonner';
@@ -26,6 +26,17 @@ const TASK_STATUS_FILTERS: { value: 'all' | 'open' | 'completed' | 'dead'; label
   { value: 'open', label: 'Open' },
   { value: 'completed', label: 'Completed' },
   { value: 'dead', label: 'Dead' },
+];
+
+type TaskSortOption = 'priority' | 'date_newest' | 'date_oldest' | 'alpha_az' | 'alpha_za' | 'status';
+
+const TASK_SORT_OPTIONS: { value: TaskSortOption; label: string }[] = [
+  { value: 'priority', label: 'Priority' },
+  { value: 'date_newest', label: 'Newest First' },
+  { value: 'date_oldest', label: 'Oldest First' },
+  { value: 'alpha_az', label: 'A → Z' },
+  { value: 'alpha_za', label: 'Z → A' },
+  { value: 'status', label: 'By Status' },
 ];
 
 export function ProjectDetail() {
@@ -56,6 +67,7 @@ export function ProjectDetail() {
   const reorderLineItems = useReorderBudgetLineItems();
 
   const [taskStatusFilter, setTaskStatusFilter] = useState<'all' | 'open' | 'completed' | 'dead'>('open');
+  const [taskSortBy, setTaskSortBy] = useState<TaskSortOption>('priority');
   const [editingTotalBudget, setEditingTotalBudget] = useState(false);
   const [editingAreaBudgetId, setEditingAreaBudgetId] = useState<string | null>(null);
   const [newAreaName, setNewAreaName] = useState('');
@@ -128,34 +140,71 @@ export function ProjectDetail() {
     );
   }
 
-  // Filter RFIs based on status
-  const filteredRfis = allRfis?.filter((rfi) => {
-    if (taskStatusFilter === 'all') return true;
-    if (taskStatusFilter === 'open') return !rfi.is_complete && rfi.status !== 'dead';
-    if (taskStatusFilter === 'completed') return rfi.is_complete || rfi.status === 'completed';
-    if (taskStatusFilter === 'dead') return rfi.status === 'dead';
-    return true;
-  });
+  // Filter and sort RFIs based on status and sort option
+  const sortedWarRoomItems = useMemo(() => {
+    if (!allRfis || !project) return [];
 
-  // Convert RFIs to WarRoomItem format for TaskCard
-  const warRoomItems: WarRoomItem[] = (filteredRfis || []).map((rfi) => ({
-    ...rfi,
-    project_name: project.name,
-    project_address: project.address,
-    days_since_contact: rfi.last_contacted_at
-      ? Math.floor((Date.now() - new Date(rfi.last_contacted_at).getTime()) / (1000 * 60 * 60 * 24))
-      : null,
-    is_overdue: false,
-    blocked_by_task_name: null,
-  }));
+    // Filter first
+    const filteredRfis = allRfis.filter((rfi) => {
+      if (taskStatusFilter === 'all') return true;
+      if (taskStatusFilter === 'open') return !rfi.is_complete && rfi.status !== 'dead';
+      if (taskStatusFilter === 'completed') return rfi.is_complete || rfi.status === 'completed';
+      if (taskStatusFilter === 'dead') return rfi.status === 'dead';
+      return true;
+    });
 
-  // Sort: blocking first, then by priority
-  const sortedWarRoomItems = [...warRoomItems].sort((a, b) => {
-    if (a.is_blocking && !b.is_blocking) return -1;
-    if (!a.is_blocking && b.is_blocking) return 1;
-    const priorityOrder = { P1: 0, P2: 1, P3: 2 };
-    return priorityOrder[a.priority] - priorityOrder[b.priority];
-  });
+    // Convert RFIs to WarRoomItem format for TaskCard
+    const warRoomItems: WarRoomItem[] = filteredRfis.map((rfi) => ({
+      ...rfi,
+      project_name: project.name,
+      project_address: project.address,
+      days_since_contact: rfi.last_contacted_at
+        ? Math.floor((Date.now() - new Date(rfi.last_contacted_at).getTime()) / (1000 * 60 * 60 * 24))
+        : null,
+      is_overdue: false,
+      blocked_by_task_name: null,
+    }));
+
+    // Status order for sorting
+    const statusOrder: Record<string, number> = {
+      open: 1,
+      waiting_on_me: 2,
+      waiting_on_client: 3,
+      waiting_on_vendor: 4,
+      waiting_on_contractor: 5,
+      waiting_on_design_team: 6,
+      waiting_on_plh: 7,
+      follow_up: 8,
+      completed: 9,
+      dead: 10,
+    };
+
+    // Sort based on selected option
+    return [...warRoomItems].sort((a, b) => {
+      // Always put blocking items first
+      if (a.is_blocking && !b.is_blocking) return -1;
+      if (!a.is_blocking && b.is_blocking) return 1;
+
+      switch (taskSortBy) {
+        case 'priority': {
+          const priorityOrder = { P1: 0, P2: 1, P3: 2 };
+          return priorityOrder[a.priority] - priorityOrder[b.priority];
+        }
+        case 'date_newest':
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        case 'date_oldest':
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        case 'alpha_az':
+          return a.task.localeCompare(b.task);
+        case 'alpha_za':
+          return b.task.localeCompare(a.task);
+        case 'status':
+          return (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99);
+        default:
+          return 0;
+      }
+    });
+  }, [allRfis, project, taskStatusFilter, taskSortBy]);
 
   // Calculate budget totals from line items
   const budgetTotals = (allLineItems || []).reduce(
@@ -555,21 +604,39 @@ export function ProjectDetail() {
 
         {/* Tasks Tab */}
         <Tabs.Content value="tasks">
-          {/* Status filter */}
-          <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-            {TASK_STATUS_FILTERS.map((filter) => (
-              <button
-                key={filter.value}
-                onClick={() => setTaskStatusFilter(filter.value)}
-                className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
-                  taskStatusFilter === filter.value
-                    ? 'bg-primary-600 text-white'
-                    : 'bg-white text-text-secondary border border-border hover:border-gray-300'
-                }`}
+          {/* Status filter and sort */}
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {TASK_STATUS_FILTERS.map((filter) => (
+                <button
+                  key={filter.value}
+                  onClick={() => setTaskStatusFilter(filter.value)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                    taskStatusFilter === filter.value
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-white text-text-secondary border border-border hover:border-gray-300'
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Sort dropdown */}
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-text-secondary">Sort:</label>
+              <select
+                value={taskSortBy}
+                onChange={(e) => setTaskSortBy(e.target.value as TaskSortOption)}
+                className="px-3 py-1.5 border border-border rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
-                {filter.label}
-              </button>
-            ))}
+                {TASK_SORT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {rfisLoading && <SkeletonList count={3} />}

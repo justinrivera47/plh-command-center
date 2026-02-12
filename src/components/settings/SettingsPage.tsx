@@ -1,17 +1,23 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { toast } from 'sonner';
 import { useAuth } from '../../hooks/useAuth';
 import { useUIStore } from '../../stores/uiStore';
 import { followUpSettingsSchema, type FollowUpSettingsFormData } from '../../lib/schemas';
 import { USER_ROLES } from '../../lib/constants';
 import { ImportModal } from '../import';
+import { DeleteConfirmDialog } from '../shared/DeleteConfirmDialog';
 
 export function SettingsPage() {
-  const { user, profile, signOut, updateProfile } = useAuth();
+  const { user, profile, signOut, updateProfile, resetPassword, deleteAccount } = useAuth();
   const { importModalOpen, openImportModal, closeImportModal } = useUIStore();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [resetEmailSent, setResetEmailSent] = useState(false);
+  const [sendingReset, setSendingReset] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const {
     register,
@@ -43,6 +49,34 @@ export function SettingsPage() {
 
   const roleLabel = USER_ROLES.find((r) => r.value === profile?.role)?.label || 'Not set';
 
+  const handleResetPassword = async () => {
+    if (!user?.email) return;
+    setSendingReset(true);
+    try {
+      await resetPassword(user.email);
+      setResetEmailSent(true);
+      toast.success('Password reset email sent!');
+    } catch (error) {
+      toast.error('Failed to send reset email');
+      console.error(error);
+    } finally {
+      setSendingReset(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      await deleteAccount();
+      toast.success('Account deleted successfully');
+    } catch (error) {
+      toast.error('Failed to delete account');
+      console.error(error);
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
   return (
     <div className="px-4 py-6">
       {/* Header */}
@@ -62,6 +96,34 @@ export function SettingsPage() {
           <div>
             <span className="text-sm text-text-secondary">Role</span>
             <p className="text-text-primary">{roleLabel}</p>
+          </div>
+        </div>
+      </section>
+
+      {/* Security */}
+      <section className="bg-white rounded-lg border border-border p-4 mb-6">
+        <h2 className="font-medium text-text-primary mb-4">Security</h2>
+        <div className="space-y-3">
+          <div>
+            <p className="text-sm text-text-secondary mb-3">
+              Need to change your password? We'll send a reset link to your email.
+            </p>
+            {resetEmailSent ? (
+              <div className="flex items-center gap-2 text-green-600 text-sm">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>Reset email sent to {user?.email}</span>
+              </div>
+            ) : (
+              <button
+                onClick={handleResetPassword}
+                disabled={sendingReset}
+                className="py-2 px-4 border border-border text-text-primary font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {sendingReset ? 'Sending...' : 'Reset Password'}
+              </button>
+            )}
           </div>
         </div>
       </section>
@@ -178,7 +240,7 @@ export function SettingsPage() {
       </section>
 
       {/* Sign Out */}
-      <section className="bg-white rounded-lg border border-border p-4">
+      <section className="bg-white rounded-lg border border-border p-4 mb-6">
         <button
           onClick={() => signOut()}
           className="w-full py-2 px-4 bg-gray-100 text-text-primary font-medium rounded-lg hover:bg-gray-200 transition-colors"
@@ -187,8 +249,35 @@ export function SettingsPage() {
         </button>
       </section>
 
+      {/* Danger Zone */}
+      <section className="bg-white rounded-lg border border-red-200 p-4">
+        <h2 className="font-medium text-red-600 mb-4">Danger Zone</h2>
+        <div className="space-y-3">
+          <p className="text-sm text-text-secondary">
+            Permanently delete your account and all associated data. This action cannot be undone.
+          </p>
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="py-2 px-4 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors"
+          >
+            Delete Account
+          </button>
+        </div>
+      </section>
+
       {/* Import Modal */}
       <ImportModal open={importModalOpen} onClose={closeImportModal} />
+
+      {/* Delete Account Confirmation */}
+      {showDeleteConfirm && (
+        <DeleteConfirmDialog
+          title="Delete Account"
+          message="Are you sure you want to delete your account? This will permanently delete all your projects, tasks, quotes, vendors, and other data. This action cannot be undone."
+          onConfirm={handleDeleteAccount}
+          onCancel={() => setShowDeleteConfirm(false)}
+          isDeleting={deleting}
+        />
+      )}
     </div>
   );
 }
