@@ -83,64 +83,8 @@ export function ProjectDetail() {
   // Project delete state
   const [showDeleteProjectConfirm, setShowDeleteProjectConfirm] = useState(false);
 
-  // Helper to open quick entry with project context
-  const openQuickEntryWithProject = (type: 'quote' | 'rfi' | 'status' | 'call' | 'vendor') => {
-    if (projectId) {
-      setSelectedProjectId(projectId);
-    }
-    openQuickEntry(type);
-  };
-
-  const formatCurrency = (amount: number | null) => {
-    if (amount === null || amount === undefined) return '—';
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
-
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 0) {
-      return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-    } else if (diffDays === 1) {
-      return 'Yesterday';
-    } else if (diffDays < 7) {
-      return `${diffDays} days ago`;
-    } else {
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    }
-  };
-
-  if (projectLoading) {
-    return (
-      <div className="px-4 py-6">
-        <div className="h-8 w-48 bg-gray-200 rounded animate-pulse mb-4" />
-        <SkeletonList count={3} />
-      </div>
-    );
-  }
-
-  if (!project) {
-    return (
-      <div className="px-4 py-6">
-        <EmptyState
-          icon="X"
-          title="Project not found"
-          description="This project doesn't exist or you don't have access to it."
-          actionLabel="Back to Projects"
-          onAction={() => window.history.back()}
-        />
-      </div>
-    );
-  }
-
   // Filter and sort RFIs based on status and sort option
+  // NOTE: This useMemo MUST be called before any conditional returns to comply with React hooks rules
   const sortedWarRoomItems = useMemo(() => {
     if (!allRfis || !project) return [];
 
@@ -205,6 +149,63 @@ export function ProjectDetail() {
       }
     });
   }, [allRfis, project, taskStatusFilter, taskSortBy]);
+
+  // Helper to open quick entry with project context
+  const openQuickEntryWithProject = (type: 'quote' | 'rfi' | 'status' | 'call' | 'vendor') => {
+    if (projectId) {
+      setSelectedProjectId(projectId);
+    }
+    openQuickEntry(type);
+  };
+
+  const formatCurrency = (amount: number | null) => {
+    if (amount === null || amount === undefined) return '—';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) {
+      return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    } else if (diffDays === 1) {
+      return 'Yesterday';
+    } else if (diffDays < 7) {
+      return `${diffDays} days ago`;
+    } else {
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+  };
+
+  if (projectLoading) {
+    return (
+      <div className="px-4 py-6">
+        <div className="h-8 w-48 bg-gray-200 rounded animate-pulse mb-4" />
+        <SkeletonList count={3} />
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className="px-4 py-6">
+        <EmptyState
+          icon="X"
+          title="Project not found"
+          description="This project doesn't exist or you don't have access to it."
+          actionLabel="Back to Projects"
+          onAction={() => window.history.back()}
+        />
+      </div>
+    );
+  }
 
   // Calculate budget totals from line items
   const budgetTotals = (allLineItems || []).reduce(
