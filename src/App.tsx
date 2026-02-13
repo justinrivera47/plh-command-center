@@ -9,6 +9,7 @@ import { useAuth } from './hooks/useAuth';
 
 // Layout - not lazy loaded as it's the shell
 import { AppShell } from './components/layout/AppShell';
+import { ServiceStatusBanner } from './components/shared/ServiceStatusBanner';
 
 // Auth - lazy loaded
 const LoginPage = lazy(() => import('./components/auth/LoginPage').then(m => ({ default: m.LoginPage })));
@@ -119,6 +120,7 @@ function App() {
           duration={4000}
         />
         <BrowserRouter>
+          <ServiceStatusBanner />
           <CommandPalette />
           <Suspense fallback={<PageLoader />}>
             <Routes>

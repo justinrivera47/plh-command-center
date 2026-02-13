@@ -119,7 +119,10 @@ export const newProjectSchema = z.object({
   address: z.string().optional(),
   client_email: z.string().email('Invalid email').optional().or(z.literal('')),
   client_phone: z.string().optional(),
-  total_budget: z.number().positive('Budget must be positive').optional().nullable(),
+  // Handle NaN from empty number inputs (valueAsNumber returns NaN for empty)
+  total_budget: z.number().positive('Budget must be positive').optional()
+    .refine((val) => val === undefined || !Number.isNaN(val), { message: 'Invalid budget' })
+    .or(z.nan().transform(() => undefined)),
 });
 
 export type NewProjectFormData = z.infer<typeof newProjectSchema>;

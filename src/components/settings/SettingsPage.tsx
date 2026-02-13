@@ -8,6 +8,7 @@ import { followUpSettingsSchema, type FollowUpSettingsFormData } from '../../lib
 import { USER_ROLES } from '../../lib/constants';
 import { ImportModal } from '../import';
 import { DeleteConfirmDialog } from '../shared/DeleteConfirmDialog';
+import { DataBackupButton } from './DataBackupButton';
 
 export function SettingsPage() {
   const { user, profile, signOut, updateProfile, resetPassword, deleteAccount } = useAuth();
@@ -213,6 +214,7 @@ export function SettingsPage() {
       <section className="bg-white rounded-lg border border-border p-4 mb-6">
         <h2 className="font-medium text-text-primary mb-4">Data Management</h2>
         <div className="space-y-3">
+          <DataBackupButton />
           <button
             onClick={openImportModal}
             className="w-full py-3 px-4 border border-border rounded-lg hover:border-primary-300 hover:bg-primary-50 text-left transition-colors"
