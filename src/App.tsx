@@ -10,6 +10,7 @@ import { useAuth } from './hooks/useAuth';
 // Layout - not lazy loaded as it's the shell
 import { AppShell } from './components/layout/AppShell';
 import { ServiceStatusBanner } from './components/shared/ServiceStatusBanner';
+import { ChunkErrorBoundary } from './components/shared/ChunkErrorBoundary';
 
 // Auth - lazy loaded
 const LoginPage = lazy(() => import('./components/auth/LoginPage').then(m => ({ default: m.LoginPage })));
@@ -122,8 +123,9 @@ function App() {
         <BrowserRouter>
           <ServiceStatusBanner />
           <CommandPalette />
-          <Suspense fallback={<PageLoader />}>
-            <Routes>
+          <ChunkErrorBoundary>
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
               {/* Public routes */}
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignUpPage />} />
@@ -165,8 +167,9 @@ function App() {
 
               {/* Fallback */}
               <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </Suspense>
+              </Routes>
+            </Suspense>
+          </ChunkErrorBoundary>
         </BrowserRouter>
       </OnlineStatusProvider>
     </QueryClientProvider>
