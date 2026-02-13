@@ -50,44 +50,81 @@ export function useWarRoom() {
         }
       }
 
-      // Sort
-      if (filters.sortBy === 'urgency') {
-        items.sort((a, b) => {
-          // Blocking first
+      // Status order for sorting by status
+      const STATUS_ORDER: Record<string, number> = {
+        open: 1,
+        waiting_on_me: 2,
+        waiting_on_client: 3,
+        waiting_on_vendor: 4,
+        waiting_on_contractor: 5,
+        waiting_on_design_team: 6,
+        waiting_on_plh: 7,
+        follow_up: 8,
+        completed: 9,
+        dead: 10,
+      };
+
+      // Sort based on selected option
+      items.sort((a, b) => {
+        // For most sort options, still put blocking items first
+        if (filters.sortBy !== 'alpha_az' && filters.sortBy !== 'alpha_za') {
           if (a.is_blocking && !b.is_blocking) return -1;
           if (!a.is_blocking && b.is_blocking) return 1;
+        }
 
-          // Overdue next
-          if (a.is_overdue && !b.is_overdue) return -1;
-          if (!a.is_overdue && b.is_overdue) return 1;
+        switch (filters.sortBy) {
+          case 'urgency': {
+            // Overdue next
+            if (a.is_overdue && !b.is_overdue) return -1;
+            if (!a.is_overdue && b.is_overdue) return 1;
 
-          // On me next
-          if (a.status === 'waiting_on_me' && b.status !== 'waiting_on_me') return -1;
-          if (a.status !== 'waiting_on_me' && b.status === 'waiting_on_me') return 1;
+            // On me next
+            if (a.status === 'waiting_on_me' && b.status !== 'waiting_on_me') return -1;
+            if (a.status !== 'waiting_on_me' && b.status === 'waiting_on_me') return 1;
 
-          // Then by priority
-          const priorityDiff = PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
-          if (priorityDiff !== 0) return priorityDiff;
+            // Then by priority
+            const priorityDiff = PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
+            if (priorityDiff !== 0) return priorityDiff;
 
-          // Then by next action date
-          if (a.next_action_date && b.next_action_date) {
-            return new Date(a.next_action_date).getTime() - new Date(b.next_action_date).getTime();
+            // Then by next action date
+            if (a.next_action_date && b.next_action_date) {
+              return new Date(a.next_action_date).getTime() - new Date(b.next_action_date).getTime();
+            }
+            if (a.next_action_date) return -1;
+            if (b.next_action_date) return 1;
+
+            return 0;
           }
-          if (a.next_action_date) return -1;
-          if (b.next_action_date) return 1;
 
-          return 0;
-        });
-      } else {
-        // Sort by project
-        items.sort((a, b) => {
-          const projectCompare = a.project_name.localeCompare(b.project_name);
-          if (projectCompare !== 0) return projectCompare;
+          case 'priority':
+            return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
 
-          // Within project, sort by priority
-          return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
-        });
-      }
+          case 'project': {
+            const projectCompare = a.project_name.localeCompare(b.project_name);
+            if (projectCompare !== 0) return projectCompare;
+            // Within project, sort by priority
+            return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
+          }
+
+          case 'date_newest':
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+
+          case 'date_oldest':
+            return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+
+          case 'alpha_az':
+            return a.task.localeCompare(b.task);
+
+          case 'alpha_za':
+            return b.task.localeCompare(a.task);
+
+          case 'status':
+            return (STATUS_ORDER[a.status] || 99) - (STATUS_ORDER[b.status] || 99);
+
+          default:
+            return 0;
+        }
+      });
 
       return items;
     },

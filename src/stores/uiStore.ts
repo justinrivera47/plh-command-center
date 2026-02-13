@@ -5,7 +5,7 @@ interface UIState {
   warRoomFilters: {
     projectId: string | null;
     status: string | null;
-    sortBy: 'urgency' | 'project';
+    sortBy: 'urgency' | 'priority' | 'project' | 'date_newest' | 'date_oldest' | 'alpha_az' | 'alpha_za' | 'status';
   };
   setWarRoomFilters: (filters: Partial<UIState['warRoomFilters']>) => void;
 
