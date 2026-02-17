@@ -42,6 +42,7 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Local state for editable fields
+  const [localTaskName, setLocalTaskName] = useState(task.task || '');
   const [localFollowUpDate, setLocalFollowUpDate] = useState(task.next_action_date || '');
   const [localLatestUpdate, setLocalLatestUpdate] = useState(task.latest_update || '');
   const [localStallReason, setLocalStallReason] = useState(task.stall_reason || '');
@@ -172,6 +173,10 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
     const updates: Record<string, unknown> = { id: task.id };
 
     // Check each field for changes
+    if (localTaskName !== (task.task || '') && localTaskName.trim()) {
+      updates.task = localTaskName.trim();
+    }
+
     if (localFollowUpDate !== (task.next_action_date || '')) {
       updates.next_action_date = localFollowUpDate || null;
     }
@@ -278,11 +283,11 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
         {/* Row 2: Scope (if present) - truncated in collapsed view */}
         {task.scope && !expanded && (
           <div className="mb-2">
-            <p className="text-xs text-text-secondary line-clamp-2">{task.scope}</p>
-            {task.scope.length > 100 && (
+            <p className="text-sm text-text-secondary line-clamp-3">{task.scope}</p>
+            {task.scope.length > 150 && (
               <button
                 onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
-                className="text-xs text-primary-600 hover:text-primary-700 mt-1"
+                className="text-sm text-primary-600 hover:text-primary-700 mt-1"
               >
                 Read more...
               </button>
@@ -419,6 +424,21 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
 
           {/* Editable Fields */}
           <div className="p-4 space-y-4">
+            {/* Task Name - editable */}
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1">Task Name</label>
+              <input
+                type="text"
+                value={localTaskName}
+                onChange={(e) => {
+                  setLocalTaskName(e.target.value);
+                  handleLocalChange();
+                }}
+                placeholder="Task name..."
+                className="w-full px-3 py-2 border border-border rounded-md text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+
             {/* Status dropdown */}
             <div>
               <label className="block text-xs font-medium text-text-secondary mb-1">Status</label>
@@ -521,8 +541,8 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
                   handleLocalChange();
                 }}
                 placeholder="Add a note about latest activity..."
-                rows={7}
-                className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y min-h-[140px]"
+                rows={10}
+                className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y min-h-[220px]"
               />
             </div>
 
