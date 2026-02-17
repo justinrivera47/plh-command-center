@@ -10,7 +10,8 @@ INSERT INTO trade_categories (name, sort_order) VALUES
   ('Carpentry', 32),
   ('Interior Doors', 33),
   ('Exterior Doors', 34),
-  ('Stairs', 35)
+  ('Stairs', 35),
+  ('Railings', 36)
 ON CONFLICT (name) DO NOTHING;
 
 -- ============================================
