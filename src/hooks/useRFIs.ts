@@ -156,10 +156,11 @@ export function useUpdateRFI() {
 
       return data as RFI;
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      // Use refetchQueries to force immediate refresh (not just mark stale)
+      await queryClient.refetchQueries({ queryKey: ['war-room'] });
       queryClient.invalidateQueries({ queryKey: ['rfis'] });
       queryClient.invalidateQueries({ queryKey: ['rfis', data.id] });
-      queryClient.invalidateQueries({ queryKey: ['war-room'] });
       queryClient.invalidateQueries({ queryKey: ['project-activity'] });
     },
   });
@@ -226,9 +227,10 @@ export function useUpdateRFIStatus() {
 
       return updatedRFI as RFI;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      // Use refetchQueries to force immediate refresh (not just mark stale)
+      await queryClient.refetchQueries({ queryKey: ['war-room'] });
       queryClient.invalidateQueries({ queryKey: ['rfis'] });
-      queryClient.invalidateQueries({ queryKey: ['war-room'] });
       queryClient.invalidateQueries({ queryKey: ['project-activity'] });
     },
   });
