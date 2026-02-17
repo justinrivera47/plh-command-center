@@ -1,3 +1,4 @@
+import { useMemo, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as Dialog from '@radix-ui/react-dialog';
@@ -6,7 +7,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { useActiveProjects, useCreateProject } from '../../hooks/useProjects';
 import { useOpenRFIs, useCreateRFI, useUpdateRFI, useUpdateRFIStatus } from '../../hooks/useRFIs';
 import { useCreateQuote } from '../../hooks/useQuotes';
-import { useVendors, useTradeCategories, useCreateVendor } from '../../hooks/useVendors';
+import { useTradeCategories, useCreateVendor, useVendorsWithTradeIds } from '../../hooks/useVendors';
 import { useCreateCallLog, useUpdateCallLogRFI } from '../../hooks/useCallLogs';
 import { useAuth } from '../../hooks/useAuth';
 import {
@@ -112,7 +113,7 @@ function LogQuoteForm() {
   const { user } = useAuth();
   const { data: projects } = useActiveProjects();
   const { data: trades } = useTradeCategories();
-  const { data: vendors } = useVendors();
+  const { data: vendorsWithTrades } = useVendorsWithTradeIds();
   const createQuote = useCreateQuote();
   const closeQuickEntry = useUIStore((state) => state.closeQuickEntry);
   const selectedProjectId = useUIStore((state) => state.selectedProjectId);
@@ -122,6 +123,7 @@ function LogQuoteForm() {
     handleSubmit,
     formState: { errors, isSubmitting },
     watch,
+    setValue,
   } = useForm<LogQuoteFormData>({
     resolver: zodResolver(logQuoteSchema),
     defaultValues: {
@@ -130,6 +132,24 @@ function LogQuoteForm() {
   });
 
   const vendorId = watch('vendor_id');
+  const selectedTradeId = watch('trade_category_id');
+
+  // Filter vendors by selected trade
+  const filteredVendors = useMemo(() => {
+    if (!vendorsWithTrades) return [];
+    if (!selectedTradeId) return vendorsWithTrades; // Show all if no trade selected
+    return vendorsWithTrades.filter((v) => v.trade_ids.includes(selectedTradeId));
+  }, [vendorsWithTrades, selectedTradeId]);
+
+  // Clear vendor selection when trade changes and selected vendor doesn't have that trade
+  useEffect(() => {
+    if (vendorId && selectedTradeId && vendorsWithTrades) {
+      const selectedVendor = vendorsWithTrades.find((v) => v.id === vendorId);
+      if (selectedVendor && !selectedVendor.trade_ids.includes(selectedTradeId)) {
+        setValue('vendor_id', '');
+      }
+    }
+  }, [selectedTradeId, vendorId, vendorsWithTrades, setValue]);
 
   const onSubmit = async (data: LogQuoteFormData) => {
     if (!user) return;
@@ -204,18 +224,28 @@ function LogQuoteForm() {
       <div>
         <label className="block text-sm font-medium text-text-secondary mb-1">
           Vendor
+          {selectedTradeId && filteredVendors.length > 0 && (
+            <span className="font-normal text-text-secondary ml-1">
+              ({filteredVendors.length} for this trade)
+            </span>
+          )}
         </label>
         <select
           {...register('vendor_id')}
           className="w-full px-3 py-2 border border-border rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500"
         >
           <option value="">Select vendor (or add new below)</option>
-          {vendors?.map((v) => (
+          {filteredVendors.map((v) => (
             <option key={v.id} value={v.id}>
               {v.company_name}{v.poc_name ? ` - ${v.poc_name}` : ''}
             </option>
           ))}
         </select>
+        {selectedTradeId && filteredVendors.length === 0 && (
+          <p className="text-xs text-amber-600 mt-1">
+            No vendors for this trade yet. Add one below or in the Vendors tab.
+          </p>
+        )}
       </div>
 
       {/* New vendor name (if no vendor selected) */}

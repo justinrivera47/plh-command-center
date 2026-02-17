@@ -67,6 +67,49 @@ export function useVendorsWithTrades() {
 }
 
 export type VendorWithTrades = Vendor & { trades: string[] };
+export type VendorWithTradeIds = Vendor & { trade_ids: string[] };
+
+// Fetch vendors with their trade category IDs for filtering
+export function useVendorsWithTradeIds() {
+  return useQuery({
+    queryKey: ['vendors', 'with-trade-ids'],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Fetch vendors
+      const { data: vendors, error: vendorsError } = await supabase
+        .from('vendors')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .order('company_name', { ascending: true });
+
+      if (vendorsError) throw vendorsError;
+
+      // Fetch all vendor trades
+      const { data: vendorTrades, error: tradesError } = await supabase
+        .from('vendor_trades')
+        .select('vendor_id, trade_category_id');
+
+      if (tradesError) throw tradesError;
+
+      // Map trade IDs to vendors
+      const tradesMap: Record<string, string[]> = {};
+      vendorTrades?.forEach((vt: { vendor_id: string; trade_category_id: string }) => {
+        if (!tradesMap[vt.vendor_id]) {
+          tradesMap[vt.vendor_id] = [];
+        }
+        tradesMap[vt.vendor_id].push(vt.trade_category_id);
+      });
+
+      return (vendors as Vendor[]).map((vendor) => ({
+        ...vendor,
+        trade_ids: tradesMap[vendor.id] || [],
+      })) as VendorWithTradeIds[];
+    },
+  });
+}
 
 export function useAllVendors() {
   return useQuery({
