@@ -329,15 +329,25 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
           </div>
         )}
 
-        {/* Footer: Status, POC, Days, Action */}
+        {/* Footer: Status, POC, Days, Last Updated, Action */}
         <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <StatusBadge status={task.status} overdue={task.is_overdue} size="lg" />
             {task.poc_name && (
               <span className="text-xs text-text-secondary">{task.poc_name}</span>
             )}
             {task.days_since_contact !== null && (
               <DaysCounter days={task.days_since_contact} />
+            )}
+            {task.next_action_date && (
+              <span className="text-xs text-amber-600 font-medium">
+                follow up {new Date(task.next_action_date).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })}
+              </span>
+            )}
+            {task.updated_at && (
+              <span className="text-xs text-text-secondary">
+                updated {new Date(task.updated_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })}
+              </span>
             )}
           </div>
           <button
